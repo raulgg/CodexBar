@@ -4,8 +4,8 @@
 
 ### Added
 
-- Raycast: show remaining monthly AI credits and renewal date from the unofficial account credits API, using a
-  settings/env token or a legacy `~/.config/raycast/config.json` session file.
+- Raycast: spike only (not shippable). Unofficial credits JSON maps; 2.0 has no user-obtainable session.
+  See docs/raycast-spike.md.
 
 ### Fixed
 

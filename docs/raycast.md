@@ -8,11 +8,15 @@ read_when:
 
 # Raycast Provider
 
+**Not shippable.** Auth for Raycast 2.0 is blocked. The unofficial credits mapper is on this
+branch as a spike only. See [raycast-spike.md](raycast-spike.md) for the full trail and what to
+ask Raycast.
+
 [Raycast](https://www.raycast.com) Pro, Pro+, and Max plans include a monthly AI credit allowance. Credits launched
 with Raycast's September 2026 pricing change: Pro includes 500 credits, Pro+ 3,000, and Max 7,500, with optional
 top-ups. The in-app **Settings → Account** card shows remaining credits and the next renewal date.
 
-Raycast does not publish a public usage API. CodexBar calls the same unofficial endpoint the desktop app uses:
+Raycast does not publish a public usage API. The desktop app calls:
 
 ```text
 GET https://backend.raycast.com/api/v1/ai/credits
@@ -21,24 +25,9 @@ Authorization: Bearer <access token>
 
 ## Authentication
 
-Raycast has no user-facing usage API key. The desktop app (Raycast 2.0) keeps the OAuth session inside an encrypted
-local database, so CodexBar cannot read it the way it reads Hugging Face or Hermes login files.
-
-Token sources, in precedence order:
-
-1. CodexBar Settings → Providers → Raycast (`RAYCAST_ACCESS_TOKEN` via `codexbar config set-api-key`)
-2. `RAYCAST_ACCESS_TOKEN`
-3. `RAYCAST_TOKEN`
-4. Legacy `~/.config/raycast/config.json` (or `~/.config/raycast-x/config.json`) `token` / `Token` / `accessToken`
-5. `RAYCAST_CONFIG_PATH` pointing at a JSON file with one of those keys. When set, the default config files are never
-   consulted.
-
-```bash
-printf '%s' "$RAYCAST_ACCESS_TOKEN" | codexbar config set-api-key --provider raycast --stdin
-```
-
-The token is the account access token the Raycast app sends to `backend.raycast.com`. It is not an AI model key and
-it is not covered by a documented contract. If Raycast rejects it, paste a current session token.
+Blocked for 2.0. Website cookies get 401 on the credits URL. The desktop access token is not in
+Keychain and is not something a user can paste. Do not ship Settings “paste a token.” Details:
+[raycast-spike.md](raycast-spike.md).
 
 ## Data shown
 
