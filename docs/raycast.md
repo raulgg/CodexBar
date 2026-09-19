@@ -9,7 +9,7 @@ read_when:
 # Raycast Provider
 
 **Not shippable.** Auth for Raycast 2.0 is blocked. The unofficial credits mapper is on this
-branch as a spike only. See [raycast-spike.md](raycast-spike.md) for the full trail and what to
+branch as a spike only. See [raycast-poc.md](raycast-poc.md) for the full trail and what to
 ask Raycast.
 
 [Raycast](https://www.raycast.com) Pro, Pro+, and Max plans include a monthly AI credit allowance. Credits launched
@@ -27,7 +27,7 @@ Authorization: Bearer <access token>
 
 Blocked for 2.0. Website cookies get 401 on the credits URL. The desktop access token is not in
 Keychain and is not something a user can paste. Do not ship Settings “paste a token.” Details:
-[raycast-spike.md](raycast-spike.md).
+[raycast-poc.md](raycast-poc.md).
 
 ## Data shown
 

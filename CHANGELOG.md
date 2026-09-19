@@ -5,7 +5,7 @@
 ### Added
 
 - Raycast: spike only (not shippable). Unofficial credits JSON maps; 2.0 has no user-obtainable session.
-  See docs/raycast-spike.md.
+  See docs/raycast-poc.md.
 
 ### Fixed
 

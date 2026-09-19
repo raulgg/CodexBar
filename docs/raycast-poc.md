@@ -1,12 +1,15 @@
 ---
-summary: "Working note: Raycast AI credits spike. Not a shipped provider. Auth is blocked for 2.0."
+summary: "POC working note: Raycast AI credits. Delete this file before opening a PR."
 read_when:
   - Picking this provider back up
   - Talking to Raycast about OAuth or a website credits API
-  - Deciding whether cookie Auto can work
+  - Opening a Raycast provider PR (delete this file first)
 ---
 
-# Raycast credits spike (temporary)
+# Raycast credits POC
+
+**Delete this file if this work ever becomes a PR.** It is a local discovery note, not
+provider documentation.
 
 **Status: blocked.** Do not merge as a user-facing provider. The mapper and unofficial
 `GET /api/v1/ai/credits` contract are real. There is no honest way for a 2.0 user to give
