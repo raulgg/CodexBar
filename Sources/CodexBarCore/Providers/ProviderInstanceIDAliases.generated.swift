@@ -77,6 +77,7 @@ extension ProviderInstanceID {
     public static let coderabbit = UsageProvider.coderabbit.instanceID
     public static let replicate = UsageProvider.replicate.instanceID
     public static let huggingface = UsageProvider.huggingface.instanceID
+    public static let raycast = UsageProvider.raycast.instanceID
 }
 
 // swiftformat:enable sortDeclarations
