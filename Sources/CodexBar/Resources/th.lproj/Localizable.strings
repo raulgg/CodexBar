@@ -133,6 +133,10 @@
 "Cookie: …" = "คุกกี้: ...";
 "CopilotDeviceFlow" = "โคไพลอตอุปกรณ์โฟลว์";
 "Cost" = "ราคา";
+"Token history" = "ประวัติโทเคน";
+"Local token history · dollar costs unavailable" = "ประวัติโทเคนในเครื่อง · ไม่มีข้อมูลค่าใช้จ่ายเป็นดอลลาร์";
+"Partial local history · recorded token subtotal" = "ประวัติในเครื่องบางส่วน · ยอดรวมย่อยของโทเคนที่บันทึก";
+"Local token history is unavailable or incomplete." = "ประวัติโทเคนในเครื่องไม่พร้อมใช้งานหรือไม่ครบถ้วน";
 "Could not add Codex account" = "ไม่สามารถเพิ่มบัญชี Codex ได้";
 "Could not open Terminal for Gemini" = "ไม่สามารถเปิดเทอร์มินัลสําหรับ Gemini";
 "Could not start claude /login" = "ไม่สามารถเริ่ม claude /login";
@@ -888,6 +892,12 @@
 "usage_percent_suffix_used" = "ใช้แล้ว";
 "Store multiple DeepSeek API keys." = "จัดเก็บปุ่ม DeepSeek API หลายปุ่ม";
 "This week" = "สัปดาห์นี้";
+"Current window" = "หน้าต่างปัจจุบัน";
+"Last week" = "สัปดาห์ที่แล้ว";
+"%d weeks ago" = "%d สัปดาห์ที่แล้ว";
+"Previous window" = "หน้าต่างก่อน";
+"%d windows ago" = "%d หน้าต่างที่แล้ว";
+"Recent windows" = "หน้าต่างล่าสุด";
 "Week" = "สัปดาห์";
 "Month" = "เดือน";
 "Models" = "โมเดล";
@@ -1585,6 +1595,19 @@
 "agent_sessions_hide_unreachable_title" = "ซ่อนโฮสต์ที่เข้าถึงไม่ได้";
 "agent_sessions_hide_unreachable_subtitle" = "ซ่อนโฮสต์เมื่อดึงข้อมูลเซสชันไม่สำเร็จ";
 
+/* Overview share flow */
+"Share Usage Snapshot…" = "แชร์ภาพรวมการใช้งาน…";
+"Usage snapshot unavailable" = "ภาพรวมการใช้งานไม่พร้อมใช้งาน";
+"CodexBar couldn't prepare a shareable usage snapshot. Refresh Usage & Spend and try again." = "CodexBar ไม่สามารถเตรียมภาพรวมการใช้งานสำหรับแชร์ได้ รีเฟรชการใช้งานและค่าใช้จ่ายแล้วลองอีกครั้ง";
 "Incomplete" = "ไม่ครบถ้วน";
 "Est. subtotal (%@): %@" = "ยอดรวมย่อยโดยประมาณ (%@): %@";
 "Excluded requests with missing final usage: %d" = "คำขอที่ไม่นับรวมเนื่องจากไม่มีข้อมูลการใช้งานขั้นสุดท้าย: %d";
+
+"overview_layout_title" = "เค้าโครงภาพรวม";
+"overview_layout_subtitle" = "เลือกปริมาณข้อมูลที่จะแสดงในภาพรวม";
+"overview_layout_detailed" = "แบบละเอียด";
+"overview_layout_compact" = "กะทัดรัด";
+
+"section_widgets" = "วิดเจ็ต";
+"account_widgets_title" = "อัปเดตบัญชีสำหรับวิดเจ็ต";
+"account_widgets_description" = "เลือกบัญชีในวิดเจ็ต Account Usage แต่ละรายการ อัปเดตได้สูงสุดหกบัญชีต่อผู้ให้บริการ";

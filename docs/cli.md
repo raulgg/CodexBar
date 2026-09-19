@@ -69,8 +69,9 @@ See `docs/configuration.md` for the schema.
     no denormalization — intended for agents that want a token-cheaper alternative to parsing JSON. `usage --format
     toon` is the only command that supports it; every other command still advertises and accepts only
     `--format text|json`, and treats `toon` like any other unrecognized value.
-- `codexbar cost` prints token cost usage for Claude, Codex, Cursor, and Antigravity.
+- `codexbar cost` prints token cost usage for Claude, Codex, Cursor, Antigravity, and Muse Code.
   - Claude and Codex are scanned from local session logs without web/CLI access.
+  - Muse Code reads bounded local session logs and reports recorded token history without credentials, provider requests, or invented dollar costs. Partial and unavailable history remain distinct from measured zero (see [Muse Code](muse.md)).
   - Antigravity reads supported local token history without web, provider CLI, or credential access. It does not estimate dollar costs; unsupported timestamps and incomplete histories remain unavailable (see `docs/antigravity.md`). The same provider selection applies to `serve /cost` and dashboard cost collection.
     Text output labels this as token history and distinguishes unavailable or incomplete history from a complete period with no recorded usage.
   - Cursor is fetched from the cookie-authenticated cursor.com dashboard API (macOS only; see `docs/cursor.md`) and honors the configured cookie source: a non-empty Manual header is required and forwarded, while Off fails explicitly instead of silently omitting Cursor.
@@ -81,6 +82,10 @@ See `docs/configuration.md` for the schema.
   - `--refresh` ignores cached scans.
   - `--breakdown` adds Claude-only daily and top-model details to text output. Both sections use the same last seven calendar days (or the shorter requested interval); when that interval has no rows, both explicitly label the latest recorded days. Incomplete attribution is marked partial. Ordinary text, other providers, and JSON output are unchanged.
   - `--provider-native-only` is experimental and excludes pi and OMP session mirrors from Claude and Codex history.
+  - `--provider codex --remote <ssh-host>` produces one manual report with separate local and remote summaries. Histories are never added together, since sessions can overlap across machines. SSH uses the host's existing trusted configuration and noninteractive authentication, without agent or port forwarding. It requires an already trusted host key and a remote CLI supporting `--summary-only`.
+  - `--provider codex --format json --summary-only` emits a one-element, versioned summary array with no account identity, project paths, model rows, or session content. Schema version 1 retains `updatedAt`, `bucketTimeZone`, `historyDays`, `currencyCode`, `historyCoverageIsEstablished`, and separate `today`/`history` totals with optional `totalTokens`/`costUSD`, incomplete-request counts, coverage categories, and provenance. Missing totals remain unavailable.
+  - Host reports always scan native Codex history only. `--days` and `--refresh` apply on both hosts; each host retains its own calendar and pricing. Both modes reject `--group-by` and `--breakdown`; `--remote` and `--summary-only` cannot be combined. Ordinary `cost` output remains compatible.
+  - Remote capture is bounded to 16 KiB per stream during execution, with a 60-second client process timeout. Unsupported versions, invalid totals, overflow, and unexpected output fail closed. Remote failure retains a successful local row and exits nonzero; JSON remains one document. Ctrl-C and termination signals cancel collection and await local SSH subprocess cleanup. The remote scanner follows its SSH server's disconnect behavior and may finish after the client exits.
 - `codexbar cards` prints a one-shot usage snapshot as a responsive terminal card grid.
   - Reuses the same provider, source, account, credits, and status flags as `codexbar usage`.
   - Account lines and plan badges are included in the card grid by default.
@@ -189,15 +194,20 @@ See `docs/configuration.md` for the schema.
   commands run directly without a shell and receive `CODEXBAR_*` variables plus JSON on stdin. `--format json` and
   `--json-only` return structured per-rule results. See
   `docs/configuration.md#external-event-hooks` for the event, payload, timeout, and security contract.
+- The macOS app and `hooks watch` emit `usage_updated` after a successful current refresh, throttled to at most
+  one attempt per 600 seconds for each provider/account. Its primary and secondary positional quota windows include their cadence in
+  minutes. Synthetic placeholder windows are omitted.
 - `codexbar hooks watch` polls enabled providers and fires matching hooks on real quota and status transitions.
   Without it, hook rules only ever fire from the macOS app, so a headless install can configure hooks that never run.
   - `--interval <seconds>`: poll period. Default `300`, minimum `60`; a smaller value is rejected rather than
     clamped, because each tick fetches every selected provider.
   - `--provider <id>`: restrict to one provider; repeatable. Defaults to every enabled provider.
-  - `--format json`/`--json`/`--pretty`: emit each fired event as JSON.
+  - `--format json`/`--json`/`--pretty`: emit each attempted event as JSON, excluding throttled candidates.
   - Events are edge-triggered against the previous poll, so a condition that merely persists (a saturated window,
     an ongoing outage) does not re-fire every tick. State is in-memory only: a restart re-establishes baselines and
-    the first poll of any lane fires nothing.
+    the first poll establishes each lane's transition baseline. A successful first poll can immediately attempt
+    `usage_updated`. Repeated attempts within 600 seconds are dropped, including after command failure; no latest-value
+    queue or trailing delivery is scheduled. Private account throttle keys are never included in event payloads.
   - Run `watch` as one continuous process. Repeated one-shot invocations cannot preserve transition baselines or event
     rate limits between polls.
   - Runs read-only, like `codexbar guard`: it never prompts for credentials. A failed refresh reports

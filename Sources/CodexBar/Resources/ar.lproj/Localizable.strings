@@ -133,6 +133,10 @@
 "Cookie: …" = "كوكي: ...";
 "CopilotDeviceFlow" = "CopilotDeviceFlow";
 "Cost" = "التكلفة";
+"Token history" = "سجل الرموز";
+"Local token history · dollar costs unavailable" = "سجل الرموز المحلي · التكاليف بالدولار غير متاحة";
+"Partial local history · recorded token subtotal" = "سجل محلي جزئي · المجموع الفرعي للرموز المسجّلة";
+"Local token history is unavailable or incomplete." = "سجل الرموز المحلي غير متاح أو غير مكتمل.";
 "Could not add Codex account" = "لم أتمكن من إضافة Codex الحساب";
 "Could not open Terminal for Gemini" = "لم أتمكن من فتح الطرفية من Gemini";
 "Could not start claude /login" = "لم تستطع بدء كلود /login";
@@ -888,6 +892,12 @@
 "usage_percent_suffix_used" = "مستخدم";
 "Store multiple DeepSeek API keys." = "خزن عدة مفاتيح DeepSeek API.";
 "This week" = "هذا الأسبوع";
+"Current window" = "النافذة الحالية";
+"Last week" = "الأسبوع الماضي";
+"%d weeks ago" = "قبل %d أسابيع";
+"Previous window" = "النافذة السابقة";
+"%d windows ago" = "قبل %d نوافذ";
+"Recent windows" = "النوافذ الأخيرة";
 "Week" = "الأسبوع";
 "Month" = "الشهر";
 "Models" = "النماذج";
@@ -1585,6 +1595,19 @@
 "agent_sessions_hide_unreachable_title" = "إخفاء المضيفين غير المتاحين";
 "agent_sessions_hide_unreachable_subtitle" = "إخفاء المضيفين عند تعذّر جلب جلساتهم.";
 
+/* Overview share flow */
+"Share Usage Snapshot…" = "مشاركة ملخص الاستخدام…";
+"Usage snapshot unavailable" = "ملخص الاستخدام غير متاح";
+"CodexBar couldn't prepare a shareable usage snapshot. Refresh Usage & Spend and try again." = "تعذر على CodexBar إعداد ملخص استخدام قابل للمشاركة. حدّث الاستخدام والإنفاق ثم حاول مرة أخرى.";
 "Incomplete" = "غير مكتمل";
 "Est. subtotal (%@): %@" = "الإجمالي الفرعي التقديري (%@): %@";
 "Excluded requests with missing final usage: %d" = "الطلبات المستبعدة لعدم توفر بيانات الاستخدام النهائية: %d";
+
+"overview_layout_title" = "تخطيط النظرة العامة";
+"overview_layout_subtitle" = "اختر مقدار المعلومات التي تعرضها النظرة العامة.";
+"overview_layout_detailed" = "مفصل";
+"overview_layout_compact" = "مضغوط";
+
+"section_widgets" = "الأدوات";
+"account_widgets_title" = "تحديث الحسابات للأدوات";
+"account_widgets_description" = "اختر حسابًا في كل أداة Account Usage. يتم تحديث ما يصل إلى ستة حسابات لكل مزوّد.";

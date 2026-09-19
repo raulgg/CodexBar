@@ -38,6 +38,7 @@ extension SettingsStore {
         _ = self.kiroMenuBarDisplayMode
         _ = self.historicalTrackingEnabled
         _ = self.multiAccountMenuLayout
+        _ = self.accountWidgetsEnabled
         _ = self.menuBarMetricPreferencesRaw
         _ = self.menuBarLayout
         _ = self.menuBarLayoutOverrides
@@ -99,6 +100,7 @@ extension SettingsStore {
         _ = self.zoomMateCookieSource
         _ = self.ollamaCookieSource
         _ = self.mergeIcons
+        _ = self.mergedOverviewLayout
         _ = self.switcherShowsIcons
         _ = self.mergedOverviewSelectedProviders
         _ = self.zaiAPIToken

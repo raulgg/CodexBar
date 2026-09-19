@@ -150,6 +150,10 @@
 "Cookie: …" = "Cookie: …";
 "CopilotDeviceFlow" = "CopilotDeviceFlow";
 "Cost" = "コスト";
+"Token history" = "トークン履歴";
+"Local token history · dollar costs unavailable" = "ローカルトークン履歴 · ドル建てコストは不明";
+"Partial local history · recorded token subtotal" = "一部のローカル履歴 · 記録されたトークンの小計";
+"Local token history is unavailable or incomplete." = "ローカルトークン履歴を取得できないか、履歴が不完全です。";
 "Could not add Codex account" = "Codex アカウントを追加できませんでした";
 "Could not open Terminal for Gemini" = "Gemini 用のターミナルを開けませんでした";
 "Could not start claude /login" = "claude /login を開始できませんでした";
@@ -879,6 +883,12 @@
 "usage_percent_suffix_used" = "使用済み";
 "Store multiple DeepSeek API keys." = "複数の DeepSeek API キーを保存します。";
 "This week" = "今週";
+"Current window" = "現在のウィンドウ";
+"Last week" = "先週";
+"%d weeks ago" = "%d週間前";
+"Previous window" = "前のウィンドウ";
+"%d windows ago" = "%dウィンドウ前";
+"Recent windows" = "最近のウィンドウ";
 "Week" = "週";
 "Month" = "月";
 "Models" = "モデル";
@@ -1581,6 +1591,19 @@
 "agent_sessions_hide_unreachable_title" = "接続できないホストを非表示";
 "agent_sessions_hide_unreachable_subtitle" = "セッションの取得に失敗したホストを非表示にします。";
 
+/* Overview share flow */
+"Share Usage Snapshot…" = "使用状況の概要を共有…";
+"Usage snapshot unavailable" = "使用状況の概要を利用できません";
+"CodexBar couldn't prepare a shareable usage snapshot. Refresh Usage & Spend and try again." = "CodexBar で共有用の使用状況の概要を準備できませんでした。「使用状況と支出」を更新して、もう一度お試しください。";
 "Incomplete" = "不完全";
 "Est. subtotal (%@): %@" = "推定小計 (%@): %@";
 "Excluded requests with missing final usage: %d" = "最終的な使用量が未記録のため除外されたリクエスト: %d";
+
+"overview_layout_title" = "概要のレイアウト";
+"overview_layout_subtitle" = "概要に表示する情報量を選択します。";
+"overview_layout_detailed" = "詳細";
+"overview_layout_compact" = "コンパクト";
+
+"section_widgets" = "ウィジェット";
+"account_widgets_title" = "ウィジェット用にアカウントを更新する";
+"account_widgets_description" = "各 Account Usage ウィジェットでアカウントを選択します。プロバイダーごとに最大6つのアカウントを更新します。";

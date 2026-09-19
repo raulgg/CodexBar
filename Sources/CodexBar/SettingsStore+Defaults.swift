@@ -383,6 +383,14 @@ extension SettingsStore {
         set { self.kiroMenuBarDisplayModeRaw = newValue.rawValue }
     }
 
+    var accountWidgetsEnabled: Bool {
+        get { self.defaultsState.accountWidgetsEnabled }
+        set {
+            self.defaultsState.accountWidgetsEnabled = newValue
+            self.userDefaults.set(newValue, forKey: "accountWidgetsEnabled")
+        }
+    }
+
     var multiAccountMenuLayout: MultiAccountMenuLayout {
         get { MultiAccountMenuLayout(rawValue: self.defaultsState.multiAccountMenuLayoutRaw) ?? .segmented }
         set {
@@ -937,6 +945,14 @@ extension SettingsStore {
         set {
             self.defaultsState.mergeIcons = newValue
             self.userDefaults.set(newValue, forKey: "mergeIcons")
+        }
+    }
+
+    var mergedOverviewLayout: MergedOverviewLayout {
+        get { MergedOverviewLayout(rawValue: self.defaultsState.mergedOverviewLayoutRaw) ?? .detailed }
+        set {
+            self.defaultsState.mergedOverviewLayoutRaw = newValue.rawValue
+            self.userDefaults.set(newValue.rawValue, forKey: "mergedOverviewLayout")
         }
     }
 
