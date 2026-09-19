@@ -2,6 +2,11 @@
 
 ## 0.61.1 — Unreleased
 
+### Added
+
+- Raycast: show remaining monthly AI credits and renewal date from the unofficial account credits API, using a
+  settings/env token or a legacy `~/.config/raycast/config.json` session file.
+
 ### Fixed
 
 - Codex costs: recover excess cached request rows from their original session files, retain pricing through interrupted scans, and avoid guessing request boundaries or conflicting prices (#3741, related to #3618). Thanks @BUKOWSKIREAL!
