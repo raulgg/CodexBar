@@ -49,15 +49,21 @@ public struct RaycastUsageFetcher: Sendable {
         transport: any ProviderHTTPTransport = ProviderHTTPClient.shared,
         now: Date = Date()) async throws -> UsageSnapshot
     {
-        var request = URLRequest(url: self.creditsURL, timeoutInterval: timeout)
+        var request = URLRequest(url: self.creditsURL)
         request.httpMethod = "GET"
+        request.timeoutInterval = timeout
+        request.httpShouldHandleCookies = false
         request.setValue(cookieHeader, forHTTPHeaderField: "Cookie")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue(self.userAgent, forHTTPHeaderField: "User-Agent")
+        request.setValue("https://www.raycast.com", forHTTPHeaderField: "Origin")
+        request.setValue("https://www.raycast.com/settings", forHTTPHeaderField: "Referer")
 
         let response: ProviderHTTPResponse
         do {
-            response = try await transport.response(for: request)
+            response = try await transport.response(for: request, retryPolicy: .transientIdempotent)
+        } catch let error as URLError where error.code == .cancelled {
+            throw error
         } catch {
             throw RaycastUsageError.networkError(error.localizedDescription)
         }
