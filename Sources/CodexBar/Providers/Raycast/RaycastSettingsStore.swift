@@ -11,4 +11,15 @@ extension SettingsStore {
         get { self.resolvedCookieSource(provider: .raycast, fallback: .auto) }
         set { self.setCookieSource(newValue, provider: .raycast) }
     }
+
+    func raycastSettingsSnapshot(tokenOverride: TokenAccountOverride?) -> RaycastProviderSettings {
+        let cookieSettings: ProviderSettingsSnapshot.CookieProviderSettings = self.resolvedCookieSettings(
+            provider: .raycast,
+            configuredSource: self.raycastCookieSource,
+            configuredHeader: self.raycastCookieHeader,
+            tokenOverride: tokenOverride)
+        return RaycastProviderSettings(
+            cookieSource: cookieSettings.cookieSource,
+            manualCookieHeader: cookieSettings.manualCookieHeader)
+    }
 }

@@ -22,8 +22,15 @@ struct RaycastProviderImplementation: ProviderImplementation {
     }
 
     @MainActor
+    func settingsSnapshot(context: ProviderSettingsSnapshotContext) -> ProviderSettingsSnapshotContribution? {
+        .raycast(context.settings.raycastSettingsSnapshot(tokenOverride: context.tokenOverride))
+    }
+
+    @MainActor
     func applyTokenAccountCookieSource(settings: SettingsStore) {
-        settings.raycastCookieSource = .manual
+        if settings.raycastCookieSource != .manual {
+            settings.raycastCookieSource = .manual
+        }
     }
 
     @MainActor
@@ -35,9 +42,9 @@ struct RaycastProviderImplementation: ProviderImplementation {
             allowsOff: false,
             subtitles: {
                 .init(
-                    auto: "Automatic imports Brave, then Chrome, cookies from raycast.com.",
-                    manual: "Paste a Cookie header captured from the account settings page.",
-                    off: "Raycast cookies are disabled.")
+                    auto: L("Automatic imports browser cookies from www.raycast.com."),
+                    manual: L("Paste a Cookie header captured from %@.", "the account settings page"),
+                    off: L("%@ cookies are disabled.", "Raycast"))
             },
             trailingText: {
                 ProviderCookieRefreshAction.trailingText(

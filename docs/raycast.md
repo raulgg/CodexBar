@@ -25,19 +25,11 @@ Cookie: __raycast_session=…; csrf_token=…
 
 ## Authentication
 
-Automatic: Chrome, then Brave, cookies for `www.raycast.com` (must include `__raycast_session`).
-That import runs inside **CodexBar.app** (Full Disk Access + Brave/Chrome Safe Storage). A
-`swift build` CLI binary usually cannot read Brave cookies and reports no session found.
+Automatic: same browser-cookie import as OpenCode Go (`Browser.defaultImportOrder`, Chrome among
+the shared Chromium sources). The session cookie is `__raycast_session` on `raycast.com`.
 
-Manual: Cookie source Manual, paste the Cookie header from a signed-in
-[Account](https://www.raycast.com/settings) request. Cookie-only GET is enough; CSRF is not
-required for this route.
-
-```bash
-# after enabling the provider, from a signed-in www.raycast.com Network request:
-# paste Cookie header in Settings, or in ~/.codexbar/config.json:
-# "cookieSource": "manual", "cookieHeader": "__raycast_session=…; csrf_token=…"
-```
+Manual: paste the Cookie header from a signed-in [Account](https://www.raycast.com/settings)
+request. Cookie-only GET is enough; CSRF is not required for this route.
 
 Do not paste the desktop OAuth Bearer. Do not send website cookies to
 `backend.raycast.com/api/v1/ai/credits` (401).
@@ -60,5 +52,6 @@ Top-up packages and the Show details breakdown (`GET /api/v1/ai/credits/details`
 ## Limitations
 
 - The website credits route is unofficial and can change without notice.
-- Automatic import needs a signed-in www.raycast.com session in Chrome or Brave (`__raycast_session`).
+- Automatic import needs a signed-in www.raycast.com session (`__raycast_session`) in a browser
+  CodexBar already imports (same order as OpenCode Go).
 - BYOK, Bring Your Own Subscription, and local models do not count against these credits and are not shown here.

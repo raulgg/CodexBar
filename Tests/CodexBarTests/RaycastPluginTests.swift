@@ -177,7 +177,7 @@ struct RaycastPluginTests {
         #expect(descriptor.fetchPlan.sourceModes == Set([.auto, .web]))
         #expect(descriptor.cli.name == "raycast")
         #if os(macOS)
-        #expect(descriptor.metadata.browserCookieOrder == [.brave, .chrome])
+        #expect(descriptor.metadata.browserCookieOrder == ProviderBrowserCookieDefaults.defaultImportOrder)
         #endif
     }
 

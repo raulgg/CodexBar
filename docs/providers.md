@@ -98,7 +98,7 @@ complete when the available scan window covers fewer days.
 | [CodeRabbit](coderabbit.md) | One bounded local CLI usage report for review counts and billing state (`cli`); no quota or balance is inferred. |
 | [Replicate](replicate.md) | Native Chrome cookie candidates or a manual header → bundled plugin for monthly spend and optional prepaid credits (`web`). |
 | [Hugging Face](huggingface.md) | Access token from settings/env/CLI → bundled plugin for Inference Providers charges, optional ZeroGPU quota, and token-scoped identity (`api`). |
-| [Raycast](raycast.md) | Chrome/Brave `www.raycast.com` cookies (or Manual Cookie header) → bundled plugin for monthly AI credits (`web`). |
+| [Raycast](raycast.md) | Browser cookies for `www.raycast.com` (same import order as OpenCode Go) or Manual Cookie header → monthly AI credits (`web`). |
 | Windsurf | Web session bundle from browser localStorage (`web`) → local SQLite cache (`local`). |
 | Ollama | API key verifies Cloud API access (`api`); browser cookies expose Cloud quota windows (`web`). |
 | Synthetic | API key from config/env → quota API (`api`). |
