@@ -129,6 +129,29 @@ struct RaycastPluginTests {
     }
 
     @Test(arguments: BundledPluginTestSupport.engines)
+    func `empty browser import is a missing credential not a script crash`(
+        engine: ProviderPluginEngineKind) async throws
+    {
+        let runtime = try BundledPluginTestSupport.runtime(
+            "raycast",
+            engine: engine,
+            transport: ProviderHTTPTransportHandler { _ in
+                Issue.record("Must not fetch without a session cookie")
+                throw ProviderPluginError.secretAccess("unreachable")
+            })
+        do {
+            _ = try await runtime.fetchUsage(cookieResolver: { _, _ in
+                throw ProviderPluginError.secretAccess("no browser session cookies were found")
+            })
+            Issue.record("Expected missing credential")
+        } catch let error as ProviderFetchClassifiedError {
+            #expect(error.kind == .missingCredential)
+        } catch {
+            Issue.record("Unexpected error: \(error)")
+        }
+    }
+
+    @Test(arguments: BundledPluginTestSupport.engines)
     func `missing session cookie stays unavailable`(engine: ProviderPluginEngineKind) async throws {
         let runtime = try BundledPluginTestSupport.runtime(
             "raycast",

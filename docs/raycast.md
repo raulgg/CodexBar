@@ -26,8 +26,18 @@ Cookie: __raycast_session=…; csrf_token=…
 ## Authentication
 
 Automatic: Chrome, then Brave, cookies for `www.raycast.com` (must include `__raycast_session`).
-Manual: paste that Cookie header from a signed-in [Account](https://www.raycast.com/settings)
-request. Cookie-only GET is enough; CSRF is not required for this route.
+That import runs inside **CodexBar.app** (Full Disk Access + Brave/Chrome Safe Storage). A
+`swift build` CLI binary usually cannot read Brave cookies and reports no session found.
+
+Manual: Cookie source Manual, paste the Cookie header from a signed-in
+[Account](https://www.raycast.com/settings) request. Cookie-only GET is enough; CSRF is not
+required for this route.
+
+```bash
+# after enabling the provider, from a signed-in www.raycast.com Network request:
+# paste Cookie header in Settings, or in ~/.codexbar/config.json:
+# "cookieSource": "manual", "cookieHeader": "__raycast_session=…; csrf_token=…"
+```
 
 Do not paste the desktop OAuth Bearer. Do not send website cookies to
 `backend.raycast.com/api/v1/ai/credits` (401).

@@ -6,12 +6,27 @@ defineProvider({
   capabilities: ["browser-cookies", "http-status"],
   cookieDomains: ["www.raycast.com", "raycast.com"],
   async fetchUsage(ctx) {
-    const cookie = await ctx.browser.cookieHeader("www.raycast.com");
-    if (!/(?:^|;\s*)__raycast_session=/.test(cookie)) {
+    const sessionCookie = (value: string): boolean => /(?:^|;\s*)__raycast_session=/.test(value);
+    const missingSession = (): never => {
       throw ctx.fail.missingCredential(
-        "Sign in at www.raycast.com/settings in Chrome or Brave, or paste a Cookie header that includes __raycast_session.",
+        "No Raycast website session found. Sign in at www.raycast.com/settings in Chrome or Brave. " +
+          "Automatic import needs Full Disk Access (the packaged app, not a repo CLI build). " +
+          "Otherwise set Cookie source to Manual and paste a header that includes __raycast_session.",
       );
+    };
+    let cookie = "";
+    for (const domain of ["www.raycast.com", "raycast.com"]) {
+      try {
+        const header = await ctx.browser.cookieHeader(domain);
+        if (sessionCookie(header)) {
+          cookie = header;
+          break;
+        }
+      } catch (error) {
+        void error;
+      }
     }
+    if (!cookie) missingSession();
     const response = await ctx.http.get("https://www.raycast.com/frontend_api/current_user/ai_credits", {
       timeoutSeconds: 15,
       headers: { Cookie: cookie, Accept: "application/json" },
