@@ -38,7 +38,19 @@ struct RaycastProviderImplementation: ProviderImplementation {
                     auto: "Automatic imports Chrome or Brave cookies from www.raycast.com.",
                     manual: "Paste a Cookie header captured from the account settings page.",
                     off: "Raycast cookies are disabled.")
-            })]
+            },
+            trailingText: {
+                ProviderCookieRefreshAction.trailingText(
+                    provider: .raycast,
+                    cookieSource: context.settings.raycastCookieSource,
+                    context: context)
+            },
+            trailingActions: [
+                ProviderCookieRefreshAction.descriptor(
+                    provider: .raycast,
+                    cookieSource: { context.settings.raycastCookieSource },
+                    context: context),
+            ])]
     }
 
     @MainActor
