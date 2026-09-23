@@ -11,12 +11,60 @@ read_when:
 **Delete this file if this work ever becomes a PR.** It is a local discovery note, not
 provider documentation.
 
-**Status: blocked.** Do not merge as a user-facing provider. The mapper and unofficial
-`GET /api/v1/ai/credits` contract are real. There is no honest way for a 2.0 user to give
-CodexBar a session.
+**Status: website credits route exists (2026-09-23).** Desktop Bearer Auto is still blocked.
+The site now loads the Account credits card via a **cookie-session** API. That is the OpenCode-shaped
+path we wanted. Confirm a Cookie-only replay of that GET, then implement Auto cookies + Manual
+Cookie header. Do not merge until that replay works.
 
 This note is the discovery trail so a later attempt (or a conversation with Raycast) does not
 repeat it.
+
+## Website `frontend_api` (2026-09-23)
+
+The Account page on [www.raycast.com](https://www.raycast.com) now shows the credits card
+(“163 out of 500 credits **used**”, renews 18 Oct, Top Up). That UI calls:
+
+```text
+GET https://www.raycast.com/frontend_api/current_user/ai_credits
+Cookie: <www.raycast.com session>
+```
+
+Same path exists on `https://backend.raycast.com/frontend_api/current_user/ai_credits`.
+Unauthenticated response is Devise JSON:
+
+```json
+{"error":"You need to sign in or sign up before continuing."}
+```
+
+HTTP 401, `Content-Type: application/json`. This is a **signed-in website session**, not the
+desktop OAuth Bearer. That is why `GET /api/v1/ai/credits` in Brave still 401s with cookies:
+wrong route.
+
+Site JS (`/_next/static/immutable/chunks/2sr_sw9wj-7k5.js`):
+
+- Base path `/frontend_api/`
+- Browser `fetch` with `credentials: "include"` (sends site cookies)
+- Mutating helper also sets `X-CSRF-Token` from the non-HttpOnly `csrf_token` cookie and
+  `X-Raycast-Vercel-Proxy: true`
+- GET helper `f("current_user/ai_credits")` is a same-origin `fetch` of that path; CSRF is
+  for POST/PUT/PATCH/DELETE
+- Nearby: `GET /frontend_api/current_user`, Stripe billing portal, subscription interval
+
+`/settings` is the account page; logged-out it redirects to `/users/sign_in?return_to=%2Fsettings`.
+
+The card copy is **used / total**, not remaining (desktop was “429 of 500 left”). Mapping should
+be `usedPercent = used / total`, reset from the renew date. Exact JSON field names were not in
+the public sign-in chunks; copy them from DevTools on a 200.
+
+**Do not use** `GET https://backend.raycast.com/api/v1/ai/credits` with website cookies.
+
+### Still to prove before coding Auto
+
+1. Replay `GET https://www.raycast.com/frontend_api/current_user/ai_credits` with only the
+   Cookie header from that request (plus `Accept: application/json`). Expect 200 and used/total.
+2. Note cookie **names** on `www.raycast.com` (session vs `csrf_token`).
+3. If 200, CodexBar can follow OpenCode: Chrome/Brave cookie import for `raycast.com`, Manual
+   Cookie header as fallback. Include Brave; this machine has no Chrome profile.
 
 ## What we wanted
 
@@ -96,7 +144,7 @@ Decrypting `settings_v2.db` with `database_key` would yield `OAuthTokenResponse`
 | A | Keychain `database_key` + SQLCipher `settings_v2.db` + `OAuthTokenResponse` | Technically the only unattended 2.0 Auto. Rejected: decrypting the app DB is the wrong trust model. |
 | B | Paste / env Bearer (`RAYCAST_ACCESS_TOKEN`) | The token is real, but a normal user cannot obtain it (no API key, no website bearer, Proxyman-only). Not a fallback we would ship. |
 | C | CodexBar “Sign in with Raycast” (PKCE / device flow) | Raycast’s OAuth client is first-party. Redirect goes back to Raycast.app. No public client registration, no device-code grant in the 2.0 client. Needs Raycast to issue CodexBar a client. Unlikely. |
-| D | Chrome/Brave cookies for raycast.com, Manual Cookie header as last resort | **Dead.** Browser GET of the credits URL with cookies → 401. This agent also could not read Brave’s Cookies sqlite (macOS authorization denied even from Terminal). |
+| D | Chrome/Brave cookies for **www.raycast.com**, Manual Cookie header as last resort | **Reopened 2026-09-23.** Site Account card calls `/frontend_api/current_user/ai_credits` with the website session. `GET /api/v1/ai/credits` with those cookies is still 401 (wrong API). Cookie-only replay of the **frontend_api** GET is the remaining proof. |
 
 Honest v1 with current Raycast: **do not ship.**
 
@@ -104,7 +152,9 @@ Honest v1 with current Raycast: **do not ship.**
 
 Two asks, in likely-success order:
 
-1. **Website credits (more likely).** Expose the same monthly remaining/total/renewal on an account URL under raycast.com, authenticated with the **site session** (cookie or site bearer). Then CodexBar can use the existing OpenCode-style ladder: Chrome/Brave cookie import, Manual Cookie header if import is off. The unofficial JSON we already map (`remaining_balance_credits`, `total_balance_credits`, `next_credits_at`, `funding_subscription.tier`) is enough.
+1. **Website credits (done on their side, 2026-09-23).** Account page calls
+   `/frontend_api/current_user/ai_credits` with the site session. If Cookie replay of that GET
+   returns 200, we do not need Raycast to do more for v1 Auto.
 2. **OIDC / OAuth client for CodexBar (unlikely).** A registered client id, a `codexbar://` or localhost redirect, and a scope that can call `GET /api/v1/ai/credits` (or a documented equivalent). Then a Sign in button like Copilot. Reusing the desktop PKCE client and `com.raycast` redirect is not acceptable.
 
 Until one of those exists, leave this branch parked.
