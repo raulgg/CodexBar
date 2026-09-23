@@ -52,6 +52,10 @@ the denominator and does not invent extra usage. A zero total leaves the meter o
 
 Top-up packages and the Show details breakdown (`GET /api/v1/ai/credits/details`) are not fetched yet.
 
+Monthly even-burn pacing is parked until a live credits payload with leftover monthly
+credits or a top-up shows what `total_balance_credits` measures. See
+[raycast-pacing.md](raycast-pacing.md).
+
 ## Limitations
 
 - The website credits route is unofficial and can change without notice.
