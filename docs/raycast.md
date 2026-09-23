@@ -8,26 +8,29 @@ read_when:
 
 # Raycast Provider
 
-**Not shippable.** Auth for Raycast 2.0 is blocked. The unofficial credits mapper is on this
-branch as a spike only. See [raycast-poc.md](raycast-poc.md) for the full trail and what to
-ask Raycast.
+Website session cookies can read monthly credits. See [raycast-poc.md](raycast-poc.md) for
+the discovery trail. Delete that POC note before opening a PR.
 
 [Raycast](https://www.raycast.com) Pro, Pro+, and Max plans include a monthly AI credit allowance. Credits launched
 with Raycast's September 2026 pricing change: Pro includes 500 credits, Pro+ 3,000, and Max 7,500, with optional
 top-ups. The in-app **Settings → Account** card shows remaining credits and the next renewal date.
 
-Raycast does not publish a public usage API. The desktop app calls:
+The desktop app still uses Bearer `GET /api/v1/ai/credits`. CodexBar uses the **website**
+session instead:
 
 ```text
-GET https://backend.raycast.com/api/v1/ai/credits
-Authorization: Bearer <access token>
+GET https://www.raycast.com/frontend_api/current_user/ai_credits
+Cookie: __raycast_session=…; csrf_token=…
 ```
 
 ## Authentication
 
-Blocked for 2.0. Website cookies get 401 on the credits URL. The desktop access token is not in
-Keychain and is not something a user can paste. Do not ship Settings “paste a token.” Details:
-[raycast-poc.md](raycast-poc.md).
+Automatic: Chrome, then Brave, cookies for `www.raycast.com` (must include `__raycast_session`).
+Manual: paste that Cookie header from a signed-in [Account](https://www.raycast.com/settings)
+request. Cookie-only GET is enough; CSRF is not required for this route.
+
+Do not paste the desktop OAuth Bearer. Do not send website cookies to
+`backend.raycast.com/api/v1/ai/credits` (401).
 
 ## Data shown
 
@@ -46,7 +49,6 @@ Top-up packages and the Show details breakdown (`GET /api/v1/ai/credits/details`
 
 ## Limitations
 
-- The credits endpoint is unofficial and can change without notice.
-- Raycast 2.0 session auto-discovery is not implemented: the encryption key for `settings_v2.db` stays inside the
-  running app.
+- The website credits route is unofficial and can change without notice.
+- Automatic import needs a signed-in www.raycast.com session in Chrome or Brave (`__raycast_session`).
 - BYOK, Bring Your Own Subscription, and local models do not count against these credits and are not shown here.

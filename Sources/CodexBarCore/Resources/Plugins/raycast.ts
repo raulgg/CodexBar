@@ -1,18 +1,24 @@
 defineProvider({
   id: "raycast",
   name: "Raycast",
-  endpoints: ["https://backend.raycast.com"],
-  auth: { type: "bearer", secret: "RAYCAST_ACCESS_TOKEN" },
-  settings: [{ key: "RAYCAST_ACCESS_TOKEN", title: "Access token", type: "secure" }],
-  capabilities: ["http-status"],
+  endpoints: ["https://www.raycast.com"],
+  settings: [],
+  capabilities: ["browser-cookies", "http-status"],
+  cookieDomains: ["www.raycast.com", "raycast.com"],
   async fetchUsage(ctx) {
-    const response = await ctx.http.get("https://backend.raycast.com/api/v1/ai/credits", {
+    const cookie = await ctx.browser.cookieHeader("www.raycast.com");
+    if (!/(?:^|;\s*)__raycast_session=/.test(cookie)) {
+      throw ctx.fail.missingCredential(
+        "Sign in at www.raycast.com/settings in Chrome or Brave, or paste a Cookie header that includes __raycast_session.",
+      );
+    }
+    const response = await ctx.http.get("https://www.raycast.com/frontend_api/current_user/ai_credits", {
       timeoutSeconds: 15,
-      headers: { "User-Agent": "CodexBar", Accept: "application/json" },
+      headers: { Cookie: cookie, Accept: "application/json" },
     });
     if (response.status === 401) {
       throw ctx.fail.authenticationExpired(
-        "Raycast rejected the access token. Paste a current account token or set RAYCAST_ACCESS_TOKEN.",
+        "Raycast website session expired. Sign in at www.raycast.com/settings or paste a fresh Cookie header.",
       );
     }
     if (response.status === 403) {

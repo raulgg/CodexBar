@@ -11,10 +11,11 @@ read_when:
 **Delete this file if this work ever becomes a PR.** It is a local discovery note, not
 provider documentation.
 
-**Status: website credits route exists (2026-09-23).** Desktop Bearer Auto is still blocked.
-The site now loads the Account credits card via a **cookie-session** API. That is the OpenCode-shaped
-path we wanted. Confirm a Cookie-only replay of that GET, then implement Auto cookies + Manual
-Cookie header. Do not merge until that replay works.
+**Status: Cookie-only GET proven (2026-09-23).**
+`GET https://www.raycast.com/frontend_api/current_user/ai_credits` with only
+`Cookie: __raycast_session; csrf_token` returned 200. CSRF and `X-Raycast-Vercel-Proxy` are
+not required for that GET. Provider now uses website cookies (Chrome then Brave, Manual header
+fallback). Rotate any session that was used for the probe. Delete this POC file before a PR.
 
 This note is the discovery trail so a later attempt (or a conversation with Raycast) does not
 repeat it.

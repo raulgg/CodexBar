@@ -1,4 +1,3 @@
-import AppKit
 import CodexBarCore
 import Foundation
 
@@ -7,50 +6,54 @@ struct RaycastProviderImplementation: ProviderImplementation {
 
     @MainActor
     func presentation(context _: ProviderPresentationContext) -> ProviderPresentation {
-        ProviderPresentation { _ in "api" }
+        ProviderPresentation { _ in "web" }
     }
 
     @MainActor
     func observeSettings(_ settings: SettingsStore) {
-        _ = settings[providerConfig: .raycast, field: .apiKey]
+        _ = settings.raycastCookieSource
+        _ = settings.raycastCookieHeader
     }
 
     @MainActor
-    func isAvailable(context: ProviderAvailabilityContext) -> Bool {
-        if RaycastSettingsReader.apiKey(environment: context.environment) != nil {
-            return true
-        }
-        return !context.settings[providerConfig: .raycast, field: .apiKey]
-            .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    func tokenAccountsVisibility(context: ProviderSettingsContext, support: TokenAccountSupport) -> Bool {
+        !support.requiresManualCookieSource || context.settings.raycastCookieSource == .manual
+            || !context.settings.tokenAccounts(for: .raycast).isEmpty
+    }
+
+    @MainActor
+    func applyTokenAccountCookieSource(settings: SettingsStore) {
+        settings.raycastCookieSource = .manual
+    }
+
+    @MainActor
+    func settingsPickers(context: ProviderSettingsContext) -> [ProviderSettingsPickerDescriptor] {
+        [ProviderCookieSourceUI.picker(
+            id: "raycast-cookie-source",
+            context: context,
+            source: \.raycastCookieSource,
+            allowsOff: false,
+            subtitles: {
+                .init(
+                    auto: "Automatic imports Chrome or Brave cookies from www.raycast.com.",
+                    manual: "Paste a Cookie header captured from the account settings page.",
+                    off: "Raycast cookies are disabled.")
+            })]
     }
 
     @MainActor
     func settingsFields(context: ProviderSettingsContext) -> [ProviderSettingsFieldDescriptor] {
-        [
-            ProviderSettingsFieldDescriptor(
-                id: "raycast-access-token",
-                title: "Access token",
-                subtitle: "Raycast has no public usage API key. Paste the account access token the desktop app "
-                    + "sends to backend.raycast.com, set RAYCAST_ACCESS_TOKEN, or use a legacy "
-                    + "~/.config/raycast/config.json file.",
-                kind: .secure,
-                placeholder: "Paste access token…",
-                binding: context.providerConfigBinding(.apiKey),
-                actions: [
-                    ProviderSettingsActionDescriptor(
-                        id: "raycast-open-account",
-                        title: "Open Raycast",
-                        style: .link,
-                        isVisible: nil,
-                        perform: {
-                            NSWorkspace.shared.open(RaycastURLs.site)
-                        }),
-                ],
-                isVisible: nil),
-        ]
+        [ProviderSettingsFieldDescriptor(
+            id: "raycast-cookie-header",
+            title: "Cookie header",
+            subtitle: "Paste the Cookie header from a www.raycast.com/settings request. It must contain __raycast_session.",
+            kind: .secure,
+            placeholder: "__raycast_session=…; csrf_token=…",
+            binding: context.binding(\.raycastCookieHeader),
+            actions: [.openURL(
+                id: "raycast-open-settings",
+                title: "Open Raycast Account",
+                url: URL(string: "https://www.raycast.com/settings"))],
+            isVisible: { context.settings.raycastCookieSource == .manual })]
     }
-}
-
-enum RaycastURLs {
-    static let site = URL(string: "https://www.raycast.com")!
 }

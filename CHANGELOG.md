@@ -28,8 +28,8 @@
 
 ### Added
 
-- Raycast: spike only (not shippable). Unofficial credits JSON maps; 2.0 has no user-obtainable session.
-  See docs/raycast-poc.md.
+- Raycast: show remaining monthly AI credits from the website account session
+  (`GET /frontend_api/current_user/ai_credits`) via Chrome/Brave cookies or a Manual Cookie header.
 
 ### Fixed
 

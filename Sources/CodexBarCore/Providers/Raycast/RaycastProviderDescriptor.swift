@@ -1,16 +1,33 @@
 import Foundation
+#if os(macOS)
+import SweetCookieKit
+#endif
 
 public enum RaycastProviderDescriptor {
     public static let descriptor: ProviderDescriptor = Self.makeDescriptor()
-    private static let credentials = ProviderCredentialAdapter.apiKey(
-        environmentKey: RaycastSettingsReader.apiKeyEnvironmentKey,
-        resolve: { RaycastSettingsReader.apiKey(environment: $0) },
-        missingCredentialMessage: { _ in RaycastUsageError.missingCredentials.errorDescription })
+    private static let credentials = ProviderCredentialAdapter(tokenAccountSupport: TokenAccountSupport(
+        title: "Session tokens",
+        subtitle: "Store multiple Raycast Cookie headers.",
+        placeholder: "Cookie: …",
+        injection: .cookieHeader,
+        requiresManualCookieSource: true,
+        cookieName: nil))
+
+    /// Chrome first (CodexBar default). Brave is included because this provider was proven against a
+    /// Brave www.raycast.com session; other Chromium forks stay Manual-only.
+    private static var browserCookieOrder: BrowserCookieImportOrder? {
+        #if os(macOS)
+        [.chrome, .brave]
+        #else
+        nil
+        #endif
+    }
 
     static func makeDescriptor() -> ProviderDescriptor {
         ProviderDescriptor(
             id: .raycast,
             menuBarMetrics: ProviderMenuBarMetricCapabilities(supported: [.automatic, .primary]),
+            settingsSection: .init(RaycastProviderSettingsKey.self, cookieSettings: RaycastProviderSettings.self),
             credentials: self.credentials,
             metadata: ProviderMetadata(
                 id: .raycast,
@@ -25,7 +42,10 @@ public enum RaycastProviderDescriptor {
                 cliName: "raycast",
                 defaultEnabled: false,
                 widgetSelectable: false,
-                dashboardURL: "https://www.raycast.com",
+                isPrimaryProvider: false,
+                usesAccountFallback: false,
+                browserCookieOrder: self.browserCookieOrder,
+                dashboardURL: "https://www.raycast.com/settings",
                 statusPageURL: nil),
             branding: ProviderBranding(
                 iconStyle: .init(provider: .raycast),
@@ -42,21 +62,25 @@ public enum RaycastProviderDescriptor {
             presentation: ProviderUsagePresentation(
                 planRow: ProviderPlanRowPresentation(label: "Plan")),
             fetchPlan: ProviderFetchPlan(
-                sourceModes: [.auto, .api],
+                sourceModes: [.auto, .web],
                 pipeline: ProviderFetchPipeline(resolveStrategies: { _ in
                     [ScriptFetchStrategy(
                         id: "raycast.js",
                         provider: .raycast,
                         bundledPlugin: "raycast",
-                        secretKey: RaycastSettingsReader.apiKeyEnvironmentKey,
-                        sourceLabel: "api",
-                        resolveSecret: { environment in
-                            self.credentials.resolveToken(environment: environment)?.token
+                        sourceLabel: "web",
+                        kind: .web,
+                        resolveValues: { context in
+                            guard context.settings?.raycast?.cookieSource != .off else { return nil }
+                            return ScriptFetchStrategy.Values()
                         },
                         isEnabled: { _ in true })]
                 })),
             cli: ProviderCLIConfig(
                 name: "raycast",
-                versionDetector: nil))
+                versionDetector: nil,
+                browserSupportExemption: { _, _, settings in
+                    settings?.raycast?.cookieSource == .manual
+                }))
     }
 }

@@ -41,6 +41,21 @@ struct RaycastPluginTests {
     }
 
     @Test(arguments: BundledPluginTestSupport.engines)
+    func `website account payload maps remaining of total`(engine: ProviderPluginEngineKind) async throws {
+        let snapshot = try await Self.fetch(#"""
+        {
+          "remaining_balance_credits": "337.3751",
+          "total_balance_credits": "500.0",
+          "next_credits_at": "2026-10-18T08:34:44Z",
+          "funding_subscription": {"tier": "pro", "status": "active"}
+        }
+        """#, engine: engine)
+        #expect(abs((snapshot.primary?.usedPercent ?? 0) - 32.525) < 0.01)
+        #expect(snapshot.details[0].rows[0].value == "337.38 of 500 left")
+        #expect(snapshot.identity?.loginMethod == "Pro")
+    }
+
+    @Test(arguments: BundledPluginTestSupport.engines)
     func `numeric amounts and Pro Plus labels are preserved`(engine: ProviderPluginEngineKind) async throws {
         let snapshot = try await Self.fetch(#"""
         {
@@ -95,19 +110,52 @@ struct RaycastPluginTests {
     }
 
     @Test(arguments: BundledPluginTestSupport.engines)
-    func `requests use the declared origin token and deadline`(engine: ProviderPluginEngineKind) async throws {
+    func `requests use the website session cookie and deadline`(engine: ProviderPluginEngineKind) async throws {
         let runtime = try BundledPluginTestSupport.runtime(
             "raycast",
             engine: engine,
             transport: ProviderHTTPTransportHandler { request in
-                #expect(request.url?.absoluteString == "https://backend.raycast.com/api/v1/ai/credits")
+                #expect(
+                    request.url?.absoluteString
+                        == "https://www.raycast.com/frontend_api/current_user/ai_credits")
                 #expect(request.httpMethod == "GET")
-                #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer fixture-token")
+                #expect(request.value(forHTTPHeaderField: "Authorization") == nil)
+                #expect(request.value(forHTTPHeaderField: "Cookie") == Self.fixtureCookie)
                 #expect(request.value(forHTTPHeaderField: "Accept") == "application/json")
                 #expect(request.timeoutInterval == 15)
                 return try Self.response(request, body: Self.credits)
             })
-        _ = try await runtime.fetchUsage(secrets: ["RAYCAST_ACCESS_TOKEN": "fixture-token"])
+        _ = try await runtime.fetchUsage(cookieResolver: Self.cookieResolver)
+    }
+
+    @Test(arguments: BundledPluginTestSupport.engines)
+    func `missing session cookie stays unavailable`(engine: ProviderPluginEngineKind) async throws {
+        let runtime = try BundledPluginTestSupport.runtime(
+            "raycast",
+            engine: engine,
+            transport: ProviderHTTPTransportHandler { _ in
+                Issue.record("Must not fetch without __raycast_session")
+                throw ProviderPluginError.secretAccess("unreachable")
+            })
+        do {
+            _ = try await runtime.fetchUsage(cookieResolver: { _, _ in "csrf_token=only" })
+            Issue.record("Expected missing session cookie")
+        } catch let error as ProviderFetchClassifiedError {
+            #expect(error.kind == .missingCredential)
+        } catch {
+            Issue.record("Unexpected error: \(error)")
+        }
+    }
+
+    @Test
+    func `descriptor uses website cookies instead of a public API key`() {
+        let descriptor = ProviderDescriptorRegistry.descriptor(for: .raycast)
+        #expect(!descriptor.metadata.defaultEnabled)
+        #expect(descriptor.fetchPlan.sourceModes == Set([.auto, .web]))
+        #expect(descriptor.cli.name == "raycast")
+        #if os(macOS)
+        #expect(descriptor.metadata.browserCookieOrder == [.chrome, .brave])
+        #endif
     }
 
     @Test(arguments: [
@@ -136,7 +184,15 @@ struct RaycastPluginTests {
             transport: ProviderHTTPTransportHandler { request in
                 try Self.response(request, body: body, status: status)
             })
-        return try await runtime.fetchUsage(secrets: ["RAYCAST_ACCESS_TOKEN": "fixture-token"])
+        return try await runtime.fetchUsage(cookieResolver: Self.cookieResolver)
+    }
+
+    private static let fixtureCookie = "__raycast_session=fixture-session; csrf_token=fixture-csrf"
+
+    private static let cookieResolver: ProviderPluginRuntime.CookieResolver = { provider, domain in
+        #expect(provider == .raycast)
+        #expect(domain == "www.raycast.com")
+        return Self.fixtureCookie
     }
 
     private static func expectFailure(

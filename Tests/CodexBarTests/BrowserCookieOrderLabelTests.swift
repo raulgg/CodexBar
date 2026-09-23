@@ -94,6 +94,16 @@ struct BrowserCookieOrderStatusStringTests {
     }
 
     @Test
+    func `raycast automatic cookies use chrome then brave`() {
+        let order = ProviderDefaults.metadata[.raycast]?.browserCookieOrder
+        #expect(order == [.chrome, .brave])
+        #expect(order?.first == .chrome)
+        #expect(!order!.contains(.safari))
+        #expect(!order!.contains(.firefox))
+        #expect(!order!.contains(.edge))
+    }
+
+    @Test
     func `mistral cookie import order supports chrome firefox and safari`() {
         let order = ProviderDefaults.metadata[.mistral]?.browserCookieOrder ?? Browser.defaultImportOrder
         #expect(order == [.chrome, .firefox, .safari])

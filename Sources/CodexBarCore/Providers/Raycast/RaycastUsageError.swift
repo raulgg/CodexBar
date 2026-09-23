@@ -6,7 +6,7 @@ public enum RaycastUsageError: LocalizedError, Sendable, Equatable {
     public var errorDescription: String? {
         switch self {
         case .missingCredentials:
-            "Raycast access token not configured. Add one in Settings, set RAYCAST_ACCESS_TOKEN, or use ~/.config/raycast/config.json."
+            "No Raycast website session found. Sign in at www.raycast.com/settings in Chrome or Brave, or paste a Cookie header that includes __raycast_session."
         }
     }
 }
