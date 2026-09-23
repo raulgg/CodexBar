@@ -35,7 +35,7 @@ struct RaycastProviderImplementation: ProviderImplementation {
             allowsOff: false,
             subtitles: {
                 .init(
-                    auto: "Automatic imports Chrome or Brave cookies from www.raycast.com.",
+                    auto: "Automatic imports Brave, then Chrome, cookies from raycast.com.",
                     manual: "Paste a Cookie header captured from the account settings page.",
                     off: "Raycast cookies are disabled.")
             },

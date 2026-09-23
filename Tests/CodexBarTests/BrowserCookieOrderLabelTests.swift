@@ -94,10 +94,10 @@ struct BrowserCookieOrderStatusStringTests {
     }
 
     @Test
-    func `raycast automatic cookies use chrome then brave`() {
+    func `raycast automatic cookies use brave then chrome`() {
         let order = ProviderDefaults.metadata[.raycast]?.browserCookieOrder
-        #expect(order == [.chrome, .brave])
-        #expect(order?.first == .chrome)
+        #expect(order == [.brave, .chrome])
+        #expect(order?.first == .brave)
         #expect(!order!.contains(.safari))
         #expect(!order!.contains(.firefox))
         #expect(!order!.contains(.edge))

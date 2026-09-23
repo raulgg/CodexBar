@@ -17,7 +17,7 @@ public enum RaycastProviderDescriptor {
     /// Brave www.raycast.com session; other Chromium forks stay Manual-only.
     private static var browserCookieOrder: BrowserCookieImportOrder? {
         #if os(macOS)
-        [.chrome, .brave]
+        [.brave, .chrome]
         #else
         nil
         #endif

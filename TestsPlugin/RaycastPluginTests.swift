@@ -177,7 +177,7 @@ struct RaycastPluginTests {
         #expect(descriptor.fetchPlan.sourceModes == Set([.auto, .web]))
         #expect(descriptor.cli.name == "raycast")
         #if os(macOS)
-        #expect(descriptor.metadata.browserCookieOrder == [.chrome, .brave])
+        #expect(descriptor.metadata.browserCookieOrder == [.brave, .chrome])
         #endif
     }
 
@@ -214,7 +214,7 @@ struct RaycastPluginTests {
 
     private static let cookieResolver: ProviderPluginRuntime.CookieResolver = { provider, domain in
         #expect(provider == .raycast)
-        #expect(domain == "www.raycast.com")
+        #expect(domain == "raycast.com" || domain == "www.raycast.com")
         return Self.fixtureCookie
     }
 

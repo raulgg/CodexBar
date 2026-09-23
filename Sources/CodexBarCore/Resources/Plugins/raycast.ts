@@ -15,7 +15,9 @@ defineProvider({
       );
     };
     let cookie = "";
-    for (const domain of ["www.raycast.com", "raycast.com"]) {
+    // Query raycast.com so Domain=.raycast.com cookies match (.contains).
+    // www.raycast.com does not match host_key ".raycast.com".
+    for (const domain of ["raycast.com", "www.raycast.com"]) {
       try {
         const header = await ctx.browser.cookieHeader(domain);
         if (sessionCookie(header)) {
