@@ -700,6 +700,8 @@ extension UsageMenuCardView.Model {
     }
 
     static func subscriptionMetadataNotes(snapshot: UsageSnapshot?, provider: UsageProvider) -> [String] {
+        // Provider-specific by design: Raycast already lists the full renewal timestamp in its Credits rows.
+        guard provider != .raycast else { return [] }
         guard let snapshot else { return [] }
         if let renewsAt = snapshot.subscriptionRenewsAt {
             return [String(format: L("Renews: %@"), self.subscriptionDateString(renewsAt, provider: provider))]

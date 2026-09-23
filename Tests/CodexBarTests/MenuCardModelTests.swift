@@ -1504,4 +1504,60 @@ struct MenuCardModelTests {
         #expect(primary.resetText == nil)
         #expect(primary.detailText == "10/100 credits")
     }
+
+    @Test
+    func `raycast card keeps the credits renewal and omits the note under the bar`() throws {
+        let now = Date(timeIntervalSince1970: 1_779_000_000)
+        let renewal = Date(timeIntervalSince1970: 1_792_000_000)
+        let snapshot = try UsageSnapshot(
+            primary: RateWindow(
+                usedPercent: 33,
+                windowMinutes: nil,
+                resetsAt: renewal,
+                resetDescription: nil),
+            secondary: nil,
+            tertiary: nil,
+            details: [
+                ProviderDetailSection(
+                    title: "Credits",
+                    rows: [
+                        ProviderDetailSection.Row(label: "Left", value: "336.73"),
+                        ProviderDetailSection.Row(label: "Total", value: "500"),
+                        ProviderDetailSection.Row(label: "Renews", value: "Oct 18, 2026, 10:34 AM"),
+                    ]),
+            ],
+            subscriptionRenewsAt: renewal,
+            updatedAt: now,
+            identity: ProviderIdentitySnapshot(
+                providerID: .raycast,
+                accountEmail: nil,
+                accountOrganization: nil,
+                loginMethod: "Pro"))
+        let metadata = try #require(ProviderDefaults.metadata[.raycast])
+
+        let model = UsageMenuCardView.Model.make(.init(
+            provider: .raycast,
+            metadata: metadata,
+            snapshot: snapshot,
+            credits: nil,
+            creditsError: nil,
+            dashboardError: nil,
+            tokenSnapshot: nil,
+            tokenError: nil,
+            account: AccountInfo(email: nil, plan: nil),
+            isRefreshing: false,
+            lastError: nil,
+            usageBarsShowUsed: false,
+            resetTimeDisplayStyle: .countdown,
+            tokenCostUsageEnabled: false,
+            showOptionalCreditsAndExtraUsage: true,
+            hidePersonalInfo: false,
+            now: now))
+
+        #expect(model.usageNotes.isEmpty)
+        #expect(model.subscriptionNotes.isEmpty)
+        #expect(model.providerDetails.first?.rows.last?.label == "Renews")
+        #expect(model.providerDetails.first?.rows.last?.value == "Oct 18, 2026, 10:34 AM")
+        #expect(model.metrics.first?.resetText != nil)
+    }
 }

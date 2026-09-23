@@ -121,22 +121,14 @@ public struct RaycastUsageFetcher: Sendable {
         let funding = object["funding_subscription"] as? [String: Any] ?? [:]
         let plan = self.planLabel(funding["tier"] as? String)
         var rows: [ProviderDetailSection.Row] = []
-        if let remaining, let total {
-            rows.append(try ProviderDetailSection.Row(
-                label: "Credits",
-                value: "\(self.amount(remaining)) of \(self.amount(total)) left"))
-        } else if let remaining {
-            rows.append(try ProviderDetailSection.Row(label: "Credits remaining", value: self.amount(remaining)))
-        } else if let total {
-            rows.append(try ProviderDetailSection.Row(label: "Credit allowance", value: self.amount(total)))
+        if let remaining {
+            try rows.append(ProviderDetailSection.Row(label: "Left", value: self.amount(remaining)))
+        }
+        if let total {
+            try rows.append(ProviderDetailSection.Row(label: "Total", value: self.amount(total)))
         }
         if let renewal {
-            rows.append(try ProviderDetailSection.Row(
-                label: "Renews",
-                value: Self.monthDayFormatter.string(from: renewal)))
-        }
-        if let plan {
-            rows.append(try ProviderDetailSection.Row(label: "Plan", value: plan))
+            try rows.append(ProviderDetailSection.Row(label: "Renews", value: self.renewalText(renewal)))
         }
 
         let primary: RateWindow?
@@ -151,11 +143,11 @@ public struct RaycastUsageFetcher: Sendable {
             primary = nil
         }
 
-        return UsageSnapshot(
+        return try UsageSnapshot(
             primary: primary,
             secondary: nil,
             tertiary: nil,
-            details: rows.isEmpty ? [] : [try ProviderDetailSection(title: "Credits", rows: rows)],
+            details: rows.isEmpty ? [] : [ProviderDetailSection(title: "Credits", rows: rows)],
             subscriptionRenewsAt: renewal,
             updatedAt: now,
             identity: plan.map {
@@ -168,10 +160,14 @@ public struct RaycastUsageFetcher: Sendable {
             dataConfidence: .exact)
     }
 
-    private static let monthDayFormatter: DateFormatter = {
+    static func renewalText(_ date: Date) -> String {
+        self.renewalFormatter.string(from: date)
+    }
+
+    private static let renewalFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.setLocalizedDateFormatFromTemplate("MMMd")
+        formatter.dateFormat = "MMM d, yyyy, h:mm a"
         return formatter
     }()
 
@@ -200,7 +196,9 @@ public struct RaycastUsageFetcher: Sendable {
             return String(Int(value))
         }
         var text = String(format: "%.2f", value)
-        while text.hasSuffix("0") { text.removeLast() }
+        while text.hasSuffix("0") {
+            text.removeLast()
+        }
         if text.hasSuffix(".") { text.removeLast() }
         return text
     }

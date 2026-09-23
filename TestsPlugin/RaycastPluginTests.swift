@@ -24,7 +24,7 @@ struct RaycastPluginTests {
     """#
 
     @Test(arguments: BundledPluginTestSupport.engines)
-    func `monthly credits project as remaining of total`(engine: ProviderPluginEngineKind) async throws {
+    func `monthly credits show left and total on separate rows`(engine: ProviderPluginEngineKind) async throws {
         let snapshot = try await Self.fetch(Self.credits, engine: engine)
         #expect(snapshot.primary?.usedPercent == 75)
         #expect(snapshot.primary?.windowMinutes == nil)
@@ -33,15 +33,17 @@ struct RaycastPluginTests {
         #expect(snapshot.identity?.providerID == .raycast)
         #expect(snapshot.identity?.loginMethod == "Pro")
         #expect(snapshot.details.map(\.title) == ["Credits"])
-        #expect(snapshot.details[0].rows.map(\.label) == ["Credits", "Renews", "Plan"])
-        #expect(snapshot.details[0].rows[0].value == "125 of 500 left")
-        #expect(snapshot.details[0].rows[2].value == "Pro")
+        #expect(snapshot.details[0].rows.map(\.label) == ["Left", "Total", "Renews"])
+        #expect(snapshot.details[0].rows[0].value == "125")
+        #expect(snapshot.details[0].rows[1].value == "500")
+        let renewal = try #require(snapshot.primary?.resetsAt)
+        #expect(snapshot.details[0].rows[2].value == RaycastUsageFetcher.renewalText(renewal))
         #expect(snapshot.providerCost == nil)
         #expect(snapshot.dataConfidence == .exact)
     }
 
     @Test(arguments: BundledPluginTestSupport.engines)
-    func `website account payload maps remaining of total`(engine: ProviderPluginEngineKind) async throws {
+    func `website account payload maps left and total`(engine: ProviderPluginEngineKind) async throws {
         let snapshot = try await Self.fetch(#"""
         {
           "remaining_balance_credits": "337.3751",
@@ -51,7 +53,11 @@ struct RaycastPluginTests {
         }
         """#, engine: engine)
         #expect(abs((snapshot.primary?.usedPercent ?? 0) - 32.525) < 0.01)
-        #expect(snapshot.details[0].rows[0].value == "337.38 of 500 left")
+        #expect(snapshot.details[0].rows.map(\.label) == ["Left", "Total", "Renews"])
+        #expect(snapshot.details[0].rows[0].value == "337.38")
+        #expect(snapshot.details[0].rows[1].value == "500")
+        let renewal = try #require(snapshot.primary?.resetsAt)
+        #expect(snapshot.details[0].rows[2].value == RaycastUsageFetcher.renewalText(renewal))
         #expect(snapshot.identity?.loginMethod == "Pro")
     }
 
@@ -65,7 +71,8 @@ struct RaycastPluginTests {
         }
         """#, engine: engine)
         #expect(snapshot.primary?.usedPercent == 75)
-        #expect(snapshot.details[0].rows[0].value == "12.5 of 50 left")
+        #expect(snapshot.details[0].rows.map(\.label) == ["Left", "Total"])
+        #expect(snapshot.details[0].rows.map(\.value) == ["12.5", "50"])
         #expect(snapshot.identity?.loginMethod == "Pro+")
     }
 
@@ -77,7 +84,7 @@ struct RaycastPluginTests {
         {"remaining_balance_credits":"750","total_balance_credits":"500"}
         """#, engine: engine)
         #expect(snapshot.primary?.usedPercent == 0)
-        #expect(snapshot.details[0].rows[0].value == "750 of 500 left")
+        #expect(snapshot.details[0].rows.map(\.value) == ["750", "500"])
     }
 
     @Test(arguments: BundledPluginTestSupport.engines)
@@ -87,7 +94,8 @@ struct RaycastPluginTests {
         """#, engine: engine)
         #expect(snapshot.primary == nil)
         #expect(snapshot.identity?.loginMethod == "Max")
-        #expect(snapshot.details[0].rows[0].value == "0 of 0 left")
+        #expect(snapshot.details[0].rows.map(\.label) == ["Left", "Total"])
+        #expect(snapshot.details[0].rows.map(\.value) == ["0", "0"])
     }
 
     @Test(
@@ -168,6 +176,18 @@ struct RaycastPluginTests {
         } catch {
             Issue.record("Unexpected error: \(error)")
         }
+    }
+
+    @Test
+    func `usage parser shows credits left and total`() throws {
+        let snapshot = try RaycastUsageFetcher.parseSnapshot(data: Data(Self.credits.utf8))
+        #expect(snapshot.primary?.usedPercent == 75)
+        #expect(snapshot.identity?.loginMethod == "Pro")
+        #expect(snapshot.details[0].rows.map(\.label) == ["Left", "Total", "Renews"])
+        #expect(snapshot.details[0].rows[0].value == "125")
+        #expect(snapshot.details[0].rows[1].value == "500")
+        let renewal = try #require(snapshot.primary?.resetsAt)
+        #expect(snapshot.details[0].rows[2].value == RaycastUsageFetcher.renewalText(renewal))
     }
 
     @Test

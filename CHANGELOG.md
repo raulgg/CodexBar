@@ -28,8 +28,8 @@
 
 ### Added
 
-- Raycast: show remaining monthly AI credits from the website account session
-  (`GET /frontend_api/current_user/ai_credits`) via Chrome/Brave cookies or a Manual Cookie header.
+- Raycast: show monthly AI credits as Left and Total, with the renewal date and time, from the website account session
+  (`GET /frontend_api/current_user/ai_credits`) via Chrome/Brave cookies or a Manual Cookie header. The plan stays in the card header.
 
 ### Fixed
 

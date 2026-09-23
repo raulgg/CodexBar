@@ -40,9 +40,12 @@ The bundled `raycast.ts` plugin owns the HTTP request and snapshot mapping:
 
 | Field | Display |
 | --- | --- |
-| `remaining_balance_credits`, `total_balance_credits` | Primary meter **Credits** as percent used, plus "N of M left" |
-| `next_credits_at` | Meter reset time and **Renews** date |
-| `funding_subscription.tier` | Plan label (`pro` → Pro, `pro_plus` → Pro+, `max` → Max) |
+| `remaining_balance_credits` | **Left**, under the **Credits** heading |
+| `total_balance_credits` | **Total** |
+| `next_credits_at` | Meter reset time and **Renews**, with the date, year, and time |
+| `funding_subscription.tier` | Header plan label (`pro` → Pro, `pro_plus` → Pro+, `max` → Max) |
+
+When both amounts are present and the total is above zero, the primary meter is percent used.
 
 Remaining can exceed the current grant when unused monthly credits roll over. CodexBar still uses the reported total as
 the denominator and does not invent extra usage. A zero total leaves the meter off rather than showing 100% used.

@@ -114,16 +114,19 @@ defineProvider({
     }
     const funding = object(root.funding_subscription, "funding_subscription");
     const plan = planLabel(text(funding.tier));
+    const formatRenewal = (date: Date): string => {
+      const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      const hours24 = date.getHours();
+      const minuteValue = date.getMinutes();
+      const minutes = minuteValue < 10 ? `0${minuteValue}` : String(minuteValue);
+      const suffix = hours24 >= 12 ? "PM" : "AM";
+      const hours12 = hours24 % 12 || 12;
+      return `${months[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}, ${hours12}:${minutes} ${suffix}`;
+    };
     const rows: CodexBarDetailRow[] = [];
-    if (remaining !== undefined && total !== undefined) {
-      rows.push({ label: "Credits", value: `${amount(remaining)} of ${amount(total)} left` });
-    } else if (remaining !== undefined) {
-      rows.push({ label: "Credits remaining", value: amount(remaining) });
-    } else if (total !== undefined) {
-      rows.push({ label: "Credit allowance", value: amount(total) });
-    }
-    if (renewal) rows.push({ label: "Renews", value: ctx.format.monthDay(renewal) });
-    if (plan) rows.push({ label: "Plan", value: plan });
+    if (remaining !== undefined) rows.push({ label: "Left", value: amount(remaining) });
+    if (total !== undefined) rows.push({ label: "Total", value: amount(total) });
+    if (renewal) rows.push({ label: "Renews", value: formatRenewal(renewal) });
 
     return {
       primary:
