@@ -22,7 +22,7 @@ Cookie: __raycast_session=…; csrf_token=…
 
 ## Authentication
 
-Automatic: CodexBar imports the browser session cookie. The session cookie is the host-only `__raycast_session` on
+Automatic: CodexBar imports the Chrome session cookie. The session cookie is the host-only `__raycast_session` on
 `www.raycast.com` from Account settings. Import uses an exact host match, so other Raycast hosts such as
 `backend.raycast.com` are left alone. A parent-domain cookie on `.raycast.com` can still be read, and the account-page
 cookie wins when both exist.
@@ -36,8 +36,8 @@ Do not paste the desktop OAuth Bearer. Do not send website cookies to
 ## Implementation
 
 The shared plugin cookie broker owns browser import, the cookie cache, and rejection of a session that is missing or
-expired. Browser order stays the shared provider catalog, not a Raycast-only importer. The bundled `raycast` plugin
-owns the credits GET and snapshot mapping:
+expired. Automatic import is Chrome-only, so other browsers are not prompted. The bundled `raycast` plugin owns the
+credits GET and snapshot mapping:
 
 1. Resolve a Cookie header that includes a nonempty `__raycast_session` (and optional `csrf_token`).
 2. GET `https://www.raycast.com/frontend_api/current_user/ai_credits` with site `Origin` / `Referer` and the resolved
@@ -62,5 +62,5 @@ Top-up packages and the Show details breakdown (`GET /api/v1/ai/credits/details`
 ## Limitations
 
 - The website credits route is unofficial and can change without notice.
-- Automatic import needs a signed-in www.raycast.com session (`__raycast_session`) in a supported browser.
+- Automatic import needs a signed-in www.raycast.com session (`__raycast_session`) in Chrome.
 - BYOK, Bring Your Own Subscription, and local models do not count against these credits and are not shown here.

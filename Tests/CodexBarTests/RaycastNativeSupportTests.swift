@@ -15,7 +15,7 @@ struct RaycastNativeSupportTests {
         #expect(descriptor.credentials?.tokenAccountSupport == nil)
         #expect(TokenAccountSupportCatalog.support(for: .raycast) == nil)
         #if os(macOS)
-        #expect(descriptor.metadata.browserCookieOrder == ProviderBrowserCookieDefaults.defaultImportOrder)
+        #expect(descriptor.metadata.browserCookieOrder == [.chrome])
         #endif
         let strategies = await descriptor.fetchPlan.pipeline.resolveStrategies(Self.makeContext(cookieSource: .auto))
         #expect(strategies.map(\.id) == ["raycast.js"])
