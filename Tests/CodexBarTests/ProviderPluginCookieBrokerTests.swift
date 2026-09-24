@@ -16,8 +16,33 @@ struct ProviderPluginCookieBrokerTests {
             Self.cookie(domain: "www.raycast.com", name: "__raycast_session", value: "account"),
             Self.cookie(domain: "backend.raycast.com", name: "__raycast_session", value: "backend"),
         ].compactMap(\.self)
-        let selected = ProviderPluginCookieBroker.cookiesForRequest(cookies, domain: "www.raycast.com")
+        let selected = ProviderPluginCookieBroker.cookiesForRequest(
+            cookies, domain: "www.raycast.com", provider: .raycast)
         #expect(selected.map(\.value) == ["account"])
+    }
+
+    @Test
+    func `raycast keeps same name cookies that differ by path`() {
+        let cookies = [
+            Self.cookie(domain: ".raycast.com", name: "sid", value: "parent-root", path: "/"),
+            Self.cookie(domain: "www.raycast.com", name: "sid", value: "host-root", path: "/"),
+            Self.cookie(domain: "www.raycast.com", name: "sid", value: "host-api", path: "/api"),
+        ].compactMap(\.self)
+        let selected = ProviderPluginCookieBroker.cookiesForRequest(
+            cookies, domain: "www.raycast.com", provider: .raycast)
+        #expect(selected.map(\.value) == ["host-root", "host-api"])
+    }
+
+    @Test
+    func `other providers keep parent and path distinct cookies`() {
+        let cookies = [
+            Self.cookie(domain: ".example.test", name: "sid", value: "parent", path: "/"),
+            Self.cookie(domain: "www.example.test", name: "sid", value: "host", path: "/"),
+            Self.cookie(domain: "www.example.test", name: "sid", value: "api", path: "/api"),
+        ].compactMap(\.self)
+        let selected = ProviderPluginCookieBroker.cookiesForRequest(
+            cookies, domain: "www.example.test", provider: .manus)
+        #expect(selected.map(\.value) == ["parent", "host", "api"])
     }
     #endif
 
@@ -266,10 +291,10 @@ struct ProviderPluginCookieBrokerTests {
     }
 
     #if os(macOS)
-    private static func cookie(domain: String, name: String, value: String) -> HTTPCookie? {
+    private static func cookie(domain: String, name: String, value: String, path: String = "/") -> HTTPCookie? {
         HTTPCookie(properties: [
             .domain: domain,
-            .path: "/",
+            .path: path,
             .name: name,
             .value: value,
             .secure: true,

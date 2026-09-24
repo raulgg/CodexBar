@@ -233,7 +233,9 @@ final class ProviderPluginCookieBroker: @unchecked Sendable {
                 for source in try client.codexBarRecords(matching: query, in: browser) {
                     let records = source.records.filter { Self.matches(cookieDomain: $0.domain, domain: domain) }
                     let cookies = Self.cookiesForRequest(
-                        BrowserCookieClient.makeHTTPCookies(records, origin: query.origin), domain: domain)
+                        BrowserCookieClient.makeHTTPCookies(records, origin: query.origin),
+                        domain: domain,
+                        provider: provider)
                     let rawHeader = cookies.map { "\($0.name)=\($0.value)" }.joined(separator: "; ")
                     if let header = CookieHeaderNormalizer.normalize(rawHeader) {
                         sessions.append((header, source.label))
@@ -250,20 +252,32 @@ final class ProviderPluginCookieBroker: @unchecked Sendable {
     }
 
     #if os(macOS)
-    static func cookiesForRequest(_ cookies: [HTTPCookie], domain: String) -> [HTTPCookie] {
-        var chosen: [String: HTTPCookie] = [:]
-        var order: [String] = []
+    /// Raycast prefers its exact-host session over a parent-domain cookie of the same name and path.
+    /// Every other provider keeps the jar unchanged, including same-name cookies on different paths.
+    static func cookiesForRequest(
+        _ cookies: [HTTPCookie],
+        domain: String,
+        provider: UsageProvider?) -> [HTTPCookie]
+    {
+        guard provider == .raycast else { return cookies }
+        struct Identity: Hashable {
+            let name: String
+            let path: String
+        }
+        var chosen: [Identity: HTTPCookie] = [:]
+        var order: [Identity] = []
         for cookie in cookies where Self.matches(cookieDomain: cookie.domain, domain: domain) {
-            if let existing = chosen[cookie.name] {
+            let identity = Identity(name: cookie.name, path: cookie.path.isEmpty ? "/" : cookie.path)
+            if let existing = chosen[identity] {
                 // A host-specific session must not be shadowed by its parent-domain cookie.
                 if Self.normalizedDomain(cookie.domain) == domain,
                    Self.normalizedDomain(existing.domain) != domain
                 {
-                    chosen[cookie.name] = cookie
+                    chosen[identity] = cookie
                 }
             } else {
-                chosen[cookie.name] = cookie
-                order.append(cookie.name)
+                chosen[identity] = cookie
+                order.append(identity)
             }
         }
         return order.compactMap { chosen[$0] }
