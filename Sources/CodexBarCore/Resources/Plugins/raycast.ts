@@ -6,41 +6,81 @@ defineProvider({
   capabilities: ["browser-cookies", "http-status"],
   cookieDomains: ["www.raycast.com"],
   async fetchUsage(ctx) {
-    const sessionCookie = (value: string): boolean => {
-      const match = /(?:^|;\s*)__raycast_session=([^;]*)/.exec(value);
-      return !!match && match[1].trim().length > 0;
+    const domain = "www.raycast.com";
+    const policy = ctx.browser.availability(domain);
+    if (policy === "off") throw ctx.fail.missingCredential("Raycast cookies are disabled.");
+    // The shared broker may hand over a full jar. The credits request only sends the website session.
+    const requestHeader = (raw: string): string | undefined => {
+      const kept: string[] = [];
+      let session = "";
+      for (const part of raw.split(";")) {
+        const trimmed = part.trim();
+        const separator = trimmed.indexOf("=");
+        if (separator <= 0) continue;
+        const name = trimmed.slice(0, separator).trim();
+        const value = trimmed.slice(separator + 1).trim();
+        if (name !== "__raycast_session" && name !== "csrf_token") continue;
+        if (!value) {
+          if (name === "__raycast_session") return undefined;
+          continue;
+        }
+        if (name === "__raycast_session") session = value;
+        kept.push(`${name}=${value}`);
+      }
+      return session ? kept.join("; ") : undefined;
     };
-    const missingSession = (): never => {
-      throw ctx.fail.missingCredential(
-        "No Raycast session cookies found. Sign in at www.raycast.com/settings or paste a Cookie header.",
-      );
-    };
-    let cookie = "";
-    // Account settings session is host-only on www.raycast.com. A broader raycast.com
-    // match also returns sibling hosts such as backend.raycast.com.
-    try {
-      const header = await ctx.browser.cookieHeader("www.raycast.com");
-      if (sessionCookie(header)) cookie = header;
-    } catch (error) {
-      void error;
-    }
-    if (!cookie) missingSession();
     const timeoutRaw = Number(ctx.settings.get("webTimeoutSeconds") ?? "15");
     const timeoutSeconds = Number.isFinite(timeoutRaw) ? Math.min(30, Math.max(1, Math.round(timeoutRaw))) : 15;
-    const response = await ctx.http.get("https://www.raycast.com/frontend_api/current_user/ai_credits", {
-      timeoutSeconds,
-      headers: {
-        Cookie: cookie,
-        Accept: "application/json",
-        Origin: "https://www.raycast.com",
-        Referer: "https://www.raycast.com/settings",
-        "User-Agent":
-          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
-      },
-    });
-    if (response.status === 401) {
-      throw ctx.fail.authenticationExpired(
-        "Raycast website session expired. Sign in at www.raycast.com/settings or paste a fresh Cookie header.",
+    let expired = false;
+    let response: CodexBarHTTPTextResponse | undefined;
+    // A failed session read means this browser had nothing to offer. Keep looking, then report
+    // a missing credential instead of leaking the host error.
+    const iterator = ctx.browser.sessions(domain)[Symbol.asyncIterator]();
+    while (true) {
+      let step: IteratorResult<CodexBarCookieSession>;
+      try {
+        step = await iterator.next();
+      } catch (error) {
+        void error;
+        break;
+      }
+      if (step.done) break;
+      const session = step.value;
+      const cookie = requestHeader(session.header);
+      if (!cookie) {
+        ctx.browser.rejectCookie(domain, session);
+        continue;
+      }
+      const candidate = await ctx.http.get("https://www.raycast.com/frontend_api/current_user/ai_credits", {
+        timeoutSeconds,
+        headers: {
+          Cookie: cookie,
+          Accept: "application/json",
+          Origin: "https://www.raycast.com",
+          Referer: "https://www.raycast.com/settings",
+          "User-Agent":
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+        },
+      });
+      if (candidate.status === 401) {
+        expired = true;
+        ctx.browser.rejectCookie(domain, session);
+        continue;
+      }
+      response = candidate;
+      break;
+    }
+    if (!response) {
+      if (policy === "manual" && !expired) {
+        throw ctx.fail.missingCredential("Raycast cookie header is invalid.");
+      }
+      if (expired) {
+        throw ctx.fail.authenticationExpired(
+          "Raycast website session expired. Sign in at www.raycast.com/settings or paste a fresh Cookie header.",
+        );
+      }
+      throw ctx.fail.missingCredential(
+        "No Raycast session cookies found. Sign in at www.raycast.com/settings or paste a Cookie header.",
       );
     }
     if (response.status === 403) {

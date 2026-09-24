@@ -1,9 +1,25 @@
 import Foundation
 import Testing
 @testable import CodexBarCore
+#if os(macOS)
+import SweetCookieKit
+#endif
 
 struct ProviderPluginCookieBrokerTests {
     private let domains: Set<String> = ["cloud.example.test", "community.example.test"]
+
+    #if os(macOS)
+    @Test
+    func `declared host cookie wins over the parent domain cookie`() {
+        let cookies = [
+            Self.cookie(domain: ".raycast.com", name: "__raycast_session", value: "parent"),
+            Self.cookie(domain: "www.raycast.com", name: "__raycast_session", value: "account"),
+            Self.cookie(domain: "backend.raycast.com", name: "__raycast_session", value: "backend"),
+        ].compactMap(\.self)
+        let selected = ProviderPluginCookieBroker.cookiesForRequest(cookies, domain: "www.raycast.com")
+        #expect(selected.map(\.value) == ["account"])
+    }
+    #endif
 
     @Test
     func `China manual capture is never issued for global domain`() throws {
@@ -248,6 +264,18 @@ struct ProviderPluginCookieBrokerTests {
             settings: .init(cookieSource: source, manualCookieHeader: "Cookie: session=manual"),
             importer: importer)
     }
+
+    #if os(macOS)
+    private static func cookie(domain: String, name: String, value: String) -> HTTPCookie? {
+        HTTPCookie(properties: [
+            .domain: domain,
+            .path: "/",
+            .name: name,
+            .value: value,
+            .secure: true,
+        ])
+    }
+    #endif
 
     private func isolated(_ body: () throws -> Void) rethrows {
         try KeychainCacheStore.withImplicitTestStoreForTesting {

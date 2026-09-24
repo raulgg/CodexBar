@@ -35,8 +35,9 @@ Do not paste the desktop OAuth Bearer. Do not send website cookies to
 
 ## Implementation
 
-Native code owns cookie source selection, browser import, and the cookie cache. The bundled `raycast` plugin owns the
-credits GET and snapshot mapping:
+The shared plugin cookie broker owns browser import, the cookie cache, and rejection of a session that is missing or
+expired. Browser order stays the shared provider catalog, not a Raycast-only importer. The bundled `raycast` plugin
+owns the credits GET and snapshot mapping:
 
 1. Resolve a Cookie header that includes a nonempty `__raycast_session` (and optional `csrf_token`).
 2. GET `https://www.raycast.com/frontend_api/current_user/ai_credits` with site `Origin` / `Referer` and the resolved

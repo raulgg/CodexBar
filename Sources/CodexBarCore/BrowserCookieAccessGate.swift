@@ -22,7 +22,7 @@ public enum BrowserCookieAccessGate {
         var chromiumFamilyDeniedUntil: Date?
     }
 
-    private final class ExplicitRetryScope: @unchecked Sendable {
+    fileprivate final class ExplicitRetryScope: @unchecked Sendable {
         private struct State {
             var selectedBrowser: Browser?
             var cookieReadClaimed = false
@@ -196,6 +196,31 @@ public enum BrowserCookieAccessGate {
                 try self.$explicitRetryScope.withValue(retryScope) {
                     try operation()
                 }
+            }
+        }
+    }
+
+    /// Captured on the fetch task. Plugin cookie reads run in a detached task, which would otherwise
+    /// drop the interactive retry and treat the import as a background read.
+    struct CookieAccessSnapshot: Sendable {
+        fileprivate let interaction: ProviderInteraction
+        fileprivate let retryScope: ExplicitRetryScope?
+    }
+
+    static func captureCookieAccess() -> CookieAccessSnapshot {
+        CookieAccessSnapshot(
+            interaction: ProviderInteractionContext.current,
+            retryScope: self.explicitRetryScope)
+    }
+
+    static func withCookieAccess<T: Sendable>(
+        _ snapshot: CookieAccessSnapshot?,
+        operation: () async throws -> T) async rethrows -> T
+    {
+        guard let snapshot else { return try await operation() }
+        return try await ProviderInteractionContext.$current.withValue(snapshot.interaction) {
+            try await self.$explicitRetryScope.withValue(snapshot.retryScope) {
+                try await operation()
             }
         }
     }
@@ -448,5 +473,18 @@ public enum BrowserCookieAccessGate {
     }
 
     public static func resetForTesting() {}
+
+    struct CookieAccessSnapshot: Sendable {}
+
+    static func captureCookieAccess() -> CookieAccessSnapshot {
+        CookieAccessSnapshot()
+    }
+
+    static func withCookieAccess<T: Sendable>(
+        _: CookieAccessSnapshot?,
+        operation: () async throws -> T) async rethrows -> T
+    {
+        try await operation()
+    }
 }
 #endif

@@ -16,6 +16,7 @@ struct ProviderPluginContextOptions: Sendable {
     var cookieInvalidator: ProviderPluginRuntime.CookieInvalidator?
     var cookieSessionResolver: ProviderPluginRuntime.CookieSessionResolver?
     var cookieSessionInvalidator: ProviderPluginRuntime.CookieSessionInvalidator?
+    var cookieAccess: BrowserCookieAccessGate.CookieAccessSnapshot?
 
     func rejectCookie(domain: String, id: String) {
         if !id.isEmpty, let invalidate = self.cookieSessionInvalidator {

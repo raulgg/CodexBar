@@ -678,7 +678,12 @@ final class QuickJSProviderPluginEngine: ProviderPluginEngine, @unchecked Sendab
             let payload: String
             if session, let resolver = state.contextOptions.cookieSessionResolver {
                 let cachedOnly = JS_ToBool(self.context, arguments[1]) == 1
-                let candidate = try self.blockingValue(timeout: self.timeout) { try await resolver(domain, cachedOnly) }
+                let cookieAccess = state.contextOptions.cookieAccess
+                let candidate = try self.blockingValue(timeout: self.timeout) {
+                    try await BrowserCookieAccessGate.withCookieAccess(cookieAccess) {
+                        try await resolver(domain, cachedOnly)
+                    }
+                }
                 guard candidate == nil || candidate?.origin == "https://\(domain)" else {
                     throw ProviderPluginError.secretAccess("cookie session origin does not match its domain")
                 }
@@ -687,10 +692,20 @@ final class QuickJSProviderPluginEngine: ProviderPluginEngine, @unchecked Sendab
             } else if !session, let provider = self.manifest.id.firstPartyProvider,
                       let resolver = state.cookieResolver
             {
-                header = try self.blockingValue(timeout: self.timeout) { try await resolver(provider, domain) }
+                let cookieAccess = state.contextOptions.cookieAccess
+                header = try self.blockingValue(timeout: self.timeout) {
+                    try await BrowserCookieAccessGate.withCookieAccess(cookieAccess) {
+                        try await resolver(provider, domain)
+                    }
+                }
                 payload = header
             } else if !session, let resolver = state.instanceCookieResolver {
-                header = try self.blockingValue(timeout: self.timeout) { try await resolver(self.manifest.id, domain) }
+                let cookieAccess = state.contextOptions.cookieAccess
+                header = try self.blockingValue(timeout: self.timeout) {
+                    try await BrowserCookieAccessGate.withCookieAccess(cookieAccess) {
+                        try await resolver(self.manifest.id, domain)
+                    }
+                }
                 payload = header
             } else {
                 throw ProviderPluginError.secretAccess("browser cookie access is unavailable")

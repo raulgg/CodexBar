@@ -206,6 +206,7 @@ public final class ProviderPluginRuntime: @unchecked Sendable {
         }
 
         var contextOptions = self.contextOptions
+        contextOptions.cookieAccess = BrowserCookieAccessGate.captureCookieAccess()
         contextOptions.cookieSource = sourceMode.usesWeb ? cookieSource : .off
         contextOptions.cookieInvalidator = cookieInvalidator
         contextOptions.cookieSessionResolver = cookieSessionResolver ?? ProviderPluginCookieSession.legacyResolver(
@@ -756,6 +757,7 @@ final class JavaScriptCoreProviderPluginEngine: ProviderPluginEngine, @unchecked
             source: contextOptions.cookieSource,
             resolver: cookieResolver,
             instanceResolver: instanceCookieResolver,
+            cookieAccess: contextOptions.cookieAccess,
             redactionValues: redactionValues)
         host.setObject(cookieHeader, forKeyedSubscript: "cookieHeader" as NSString)
         let cookieSession = self.makeCookieBlock(
@@ -763,6 +765,7 @@ final class JavaScriptCoreProviderPluginEngine: ProviderPluginEngine, @unchecked
             resolver: nil,
             instanceResolver: nil,
             sessionResolver: contextOptions.cookieSessionResolver,
+            cookieAccess: contextOptions.cookieAccess,
             redactionValues: redactionValues)
         host.setObject(cookieSession, forKeyedSubscript: "cookieSession" as NSString)
 
@@ -921,6 +924,7 @@ final class JavaScriptCoreProviderPluginEngine: ProviderPluginEngine, @unchecked
         resolver: ProviderPluginRuntime.CookieResolver?,
         instanceResolver: ProviderPluginRuntime.InstanceCookieResolver?,
         sessionResolver: ProviderPluginRuntime.CookieSessionResolver? = nil,
+        cookieAccess: BrowserCookieAccessGate.CookieAccessSnapshot?,
         redactionValues: ProviderPluginRedactionValues) -> CookieBlock
     {
         { [weak self] rawDomain, cachedOnly, resolve, reject in
@@ -965,7 +969,9 @@ final class JavaScriptCoreProviderPluginEngine: ProviderPluginEngine, @unchecked
             let rejectBox = ProviderPluginJSValueBox(reject)
             Task.detached {
                 do {
-                    let (header, payload) = try await resolveCookie()
+                    let (header, payload) = try await BrowserCookieAccessGate.withCookieAccess(cookieAccess) {
+                        try await resolveCookie()
+                    }
                     redactionValues.insert(header)
                     for pair in CookieHeaderNormalizer.pairs(from: header) {
                         redactionValues.insert(pair.value)
