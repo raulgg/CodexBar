@@ -225,6 +225,7 @@ struct SettingsStoreAdditionalTests {
             .openrouter: [.automatic, .primary],
             .nous: [.automatic, .primary],
             .xkiro: [.automatic, .primary],
+            .raycast: [.automatic, .primary],
             .coderabbit: [.automatic],
             .replicate: [.automatic],
             .typesafe: [.automatic],

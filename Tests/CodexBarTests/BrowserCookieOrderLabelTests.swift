@@ -94,6 +94,13 @@ struct BrowserCookieOrderStatusStringTests {
     }
 
     @Test
+    func `raycast automatic cookies use the shared provider browser order`() {
+        let order = RaycastWebCookieSupport.automaticImportOrder(provider: .raycast)
+        #expect(order == ProviderDefaults.metadata[.raycast]?.browserCookieOrder)
+        #expect(order == ProviderBrowserCookieDefaults.defaultImportOrder)
+    }
+
+    @Test
     func `mistral cookie import order supports chrome firefox and safari`() {
         let order = ProviderDefaults.metadata[.mistral]?.browserCookieOrder ?? Browser.defaultImportOrder
         #expect(order == [.chrome, .firefox, .safari])

@@ -124,3 +124,4 @@ Remaining cookie rows need individual parity audits for their provider-specific 
 | vercel | `cut-over` | QuickJS + JavaScriptCore | Public credits API bearer GET for team USD balance and lifetime spend; no CLI discovery or metered reporting. |
 | llmman | `cut-over` | QuickJS + JavaScriptCore | Configured loopback/private-network daemon origin with an optional bearer key; `/llmman/node` memory and model summaries, best-effort version. |
 | xkiro | `cut-over` | QuickJS + JavaScriptCore | Documented, unmetered bearer GET for daily free-token counters; separate from paid spend and wallet balances. |
+| raycast | `cut-over` | QuickJS + JavaScriptCore | Website-session cookie GET for monthly AI credits and the renewal date; browser cookie import or a manual cookie header. No desktop bearer. |

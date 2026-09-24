@@ -88,6 +88,7 @@ extension ProviderInstanceID {
     public static let vercel = UsageProvider.vercel.instanceID
     public static let llmman = UsageProvider.llmman.instanceID
     public static let xkiro = UsageProvider.xkiro.instanceID
+    public static let raycast = UsageProvider.raycast.instanceID
 }
 
 // swiftformat:enable sortDeclarations

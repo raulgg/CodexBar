@@ -104,6 +104,7 @@ public enum UsageProvider: String, CaseIterable, Sendable, Codable {
     case vercel
     case llmman
     case xkiro
+    case raycast
 }
 
 // swiftformat:enable sortDeclarations

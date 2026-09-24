@@ -59,13 +59,15 @@ enum ProviderCookieRefreshAction {
     private static func perform(provider: UsageProvider, context: ProviderSettingsContext) async {
         context.setStatusText(self.statusID(provider), L("Refreshing"))
         let previousUpdatedAt = context.store.snapshot(for: provider.instanceID)?.updatedAt
-        let outcome = await self.refresh(provider: provider) {
-            await context.store.refreshProvider(provider, allowDisabled: true)
-            guard context.store.error(for: provider) == nil,
-                  context.store.lastSourceLabels[provider.instanceID] == "web",
-                  let updatedAt = context.store.snapshot(for: provider.instanceID)?.updatedAt
-            else { return false }
-            return previousUpdatedAt.map { updatedAt != $0 } ?? true
+        let outcome = await BrowserCookieAccessGate.withExplicitRetry {
+            await self.refresh(provider: provider) {
+                await context.store.refreshProvider(provider, allowDisabled: true)
+                guard context.store.error(for: provider) == nil,
+                      context.store.lastSourceLabels[provider.instanceID] == "web",
+                      let updatedAt = context.store.snapshot(for: provider.instanceID)?.updatedAt
+                else { return false }
+                return previousUpdatedAt.map { updatedAt != $0 } ?? true
+            }
         }
         context.setStatusText(self.statusID(provider), outcome == .refreshed ? nil : L("Failed"))
     }

@@ -5,6 +5,7 @@
 ### Added
 
 - xKiro: track the account's daily free-token allowance and midnight UTC reset through the documented, unmetered usage API, separately from paid balances (#3729).
+- Raycast: show monthly AI credit usage and renewal through a bundled provider plugin, with a browser session or a manual Cookie header.
 
 ### Fixed
 
