@@ -89,9 +89,7 @@ struct CodexWeeklyResetConfirmationTests {
         #expect(backfilled.primary?.usedPercent == 9)
         #expect(backfilled.primary?.windowMinutes == 300)
         #expect(backfilled.primary?.resetsAt == sessionReset)
-        #expect(backfilled.secondary?.usedPercent == 55)
-        #expect(backfilled.secondary?.windowMinutes == 10080)
-        #expect(backfilled.secondary?.resetsAt == weeklyReset)
+        #expect(backfilled.secondary == nil)
     }
 
     @Test
@@ -122,6 +120,26 @@ struct CodexWeeklyResetConfirmationTests {
                 initial: initial,
                 confirmation: confirmation)
                 == .publishConfirmation)
+    }
+
+    @Test
+    func `a weekly lane past the display tolerance cannot block a newer snapshot`() {
+        let expiredReset = self.capturedAt.addingTimeInterval(-(3 * 60))
+        let previous = self.snapshot(offset: 0, weeklyUsed: 20, weeklyReset: expiredReset)
+        let missing = self.snapshot(offset: 1, weeklyUsed: nil, weeklyReset: nil)
+        let stillExpired = self.snapshot(offset: 1, weeklyUsed: 18, weeklyReset: expiredReset)
+        let recentReset = self.capturedAt.addingTimeInterval(-30)
+        let recentlyElapsed = self.snapshot(offset: 0, weeklyUsed: 20, weeklyReset: recentReset)
+
+        #expect(
+            CodexWeeklyResetConfirmation.initialDecision(previous: previous, initial: missing)
+                == .publishInitial)
+        #expect(
+            CodexWeeklyResetConfirmation.initialDecision(previous: previous, initial: stillExpired)
+                == .publishInitial)
+        #expect(
+            CodexWeeklyResetConfirmation.initialDecision(previous: recentlyElapsed, initial: missing)
+                == .preservePrevious)
     }
 
     @Test

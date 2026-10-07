@@ -490,7 +490,7 @@ extension CodexAccountScopedRefreshTests {
     }
 
     @Test
-    func `single refresh retains the weekly lane when a source omits it`() async {
+    func `single non-exact refresh keeps the prior snapshot when a source omits a live weekly lane`() async {
         let suite = "CodexWeeklyResetPublicationTests-single-missing-weekly"
         let email = "missing-weekly@example.com"
         let settings = self.makeSettingsStore(suite: suite)
@@ -526,8 +526,8 @@ extension CodexAccountScopedRefreshTests {
         await store.refreshProvider(.codex, allowDisabled: true)
 
         #expect(await loader.callCount == 1)
-        #expect(store.snapshots[.codex]?.updatedAt == partial.updatedAt)
-        #expect(store.snapshots[.codex]?.primary?.usedPercent == 31)
+        #expect(store.snapshots[.codex]?.updatedAt == prior.updatedAt)
+        #expect(store.snapshots[.codex]?.primary?.usedPercent == 25)
         #expect(store.snapshots[.codex]?.secondary?.usedPercent == 57)
         #expect(store.snapshots[.codex]?.secondary?.resetsAt == priorBoundary)
         #expect(store.lastKnownResetSnapshots[.codex]?.secondary?.usedPercent == 57)

@@ -211,10 +211,14 @@ struct UsageFormatterTests {
 
     @Test
     func `absolute updated old`() {
+        UsageFormatter.clearLocalizationProvider()
+        UsageFormatter.clearLocaleProvider()
         let now = Date()
         let dayAgo = now.addingTimeInterval(-26 * 3600)
         let text = UsageFormatter.updatedString(from: dayAgo, now: now)
-        #expect(text.contains("Updated"))
+        let stamp = dayAgo.formatted(
+            .dateTime.month(.abbreviated).day().hour().minute().locale(Locale(identifier: "en_US_POSIX")))
+        #expect(text == "Updated \(stamp)")
         #expect(!text.contains("ago"))
     }
 

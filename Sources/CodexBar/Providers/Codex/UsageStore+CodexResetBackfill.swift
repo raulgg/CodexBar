@@ -129,15 +129,8 @@ extension UsageStore {
         else {
             return window
         }
-        if let window {
-            return window.backfillingResetTime(from: cached)
-        }
-        guard let windowMinutes = cached.windowMinutes, windowMinutes > 0 else { return nil }
-        return RateWindow(
-            usedPercent: cached.usedPercent,
-            windowMinutes: windowMinutes,
-            resetsAt: resetsAt,
-            resetDescription: cached.resetDescription)
+        guard let window else { return nil }
+        return window.backfillingResetTime(from: cached)
     }
 }
 

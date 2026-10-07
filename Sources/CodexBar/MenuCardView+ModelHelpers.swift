@@ -956,6 +956,11 @@ extension UsageMenuCardView.Model {
         } else {
             extraRateWindows
         }
+        if input.provider == .codex {
+            visibleRateWindows.removeAll { named in
+                CodexWeeklyResetConfirmation.resetIsPastDisplayTolerance(named.window, now: input.now)
+            }
+        }
         if input.provider == .claude,
            !input.showOptionalCreditsAndExtraUsage || !input.claudeDailyRoutinesUsageVisible
         {

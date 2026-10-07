@@ -162,8 +162,14 @@ extension UsageMenuCardView.Model {
 
     private static func weeklyQuotaWindow(from input: Input) -> RateWindow? {
         guard let snapshot = input.snapshot else { return nil }
-        return ProviderDescriptorRegistry.descriptor(for: input.provider)
+        let weekly = ProviderDescriptorRegistry.descriptor(for: input.provider)
             .presentation.semanticWindows(snapshot: snapshot).weekly
+        guard input.provider != .codex
+            || !CodexWeeklyResetConfirmation.resetIsPastDisplayTolerance(weekly, now: input.now)
+        else {
+            return nil
+        }
+        return weekly
     }
 
     private struct CostHistoryQuotaPresentation {

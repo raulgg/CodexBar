@@ -281,7 +281,10 @@ struct CodexConsumerProjection {
         let rateWindowsByLane = self.rateWindowsByLane(
             snapshot: context.snapshot,
             monthlyCreditLimit: self.monthlyCreditLimit(surface: surface, context: context))
-        let visibleRateLanes = self.visibleRateLanes(from: rateWindowsByLane, snapshot: context.snapshot)
+        let visibleRateLanes = self.visibleRateLanes(
+            from: rateWindowsByLane,
+            snapshot: context.snapshot,
+            evaluationTime: context.now)
         let planUtilizationLanes = self.planUtilizationLanes(from: rateWindowsByLane)
 
         let extraUsageCost = context.showOptionalCreditsAndExtraUsage
@@ -356,11 +359,26 @@ struct CodexConsumerProjection {
         guard let window = self.rateWindowsByLane[lane] else { return nil }
         switch lane {
         case .session:
-            return Self.sessionDisplayWindow(
+            let display = Self.sessionDisplayWindow(
                 session: window,
                 weekly: self.rateWindowsByLane[.weekly],
                 evaluationTime: self.evaluationTime)
-        case .weekly, .monthly:
+            guard !CodexWeeklyResetConfirmation.resetIsPastDisplayTolerance(
+                display,
+                now: self.evaluationTime)
+            else {
+                return nil
+            }
+            return display
+        case .weekly:
+            guard !CodexWeeklyResetConfirmation.resetIsPastDisplayTolerance(
+                window,
+                now: self.evaluationTime)
+            else {
+                return nil
+            }
+            return window
+        case .monthly:
             return window
         }
     }
@@ -518,7 +536,8 @@ struct CodexConsumerProjection {
 
     private static func visibleRateLanes(
         from rateWindowsByLane: [RateLane: RateWindow],
-        snapshot: UsageSnapshot?) -> [RateLane]
+        snapshot: UsageSnapshot?,
+        evaluationTime: Date) -> [RateLane]
     {
         guard let snapshot else {
             return rateWindowsByLane[.monthly] == nil ? [] : [.monthly]
@@ -531,6 +550,12 @@ struct CodexConsumerProjection {
 
         var visible: [RateLane] = []
         for lane in slottedLanes where rateWindowsByLane[lane] != nil && !visible.contains(lane) {
+            if lane != .monthly,
+               let window = rateWindowsByLane[lane],
+               CodexWeeklyResetConfirmation.resetIsPastDisplayTolerance(window, now: evaluationTime)
+            {
+                continue
+            }
             visible.append(lane)
         }
         if visible.isEmpty, rateWindowsByLane[.monthly] != nil, !snapshot.hasRateLimitWindows {

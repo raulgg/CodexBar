@@ -78,7 +78,7 @@ struct CodexWeeklyResetConfirmation: Sendable {
         case noInventoryToPreserve
     }
 
-    private static let resetEquivalenceToleranceSeconds: TimeInterval = 2 * 60
+    static let resetEquivalenceToleranceSeconds: TimeInterval = 2 * 60
     private static let stableUnchangedBoundaryToleranceSeconds: TimeInterval = 1
     private static let delayedCandidateMinimumAge: TimeInterval = 60
     private static let delayedCandidateMaximumAge: TimeInterval = 30 * 60
@@ -116,12 +116,15 @@ struct CodexWeeklyResetConfirmation: Sendable {
         guard previousWeekly.usedPercent.isFinite else {
             return .preservePrevious
         }
-        // A source can legitimately omit the weekly lane and rely on the existing
-        // reset-window backfill path. Only gate an explicit weekly observation.
+        // A missing weekly lane is not evidence of a reset. A lane whose reset is already past
+        // the display tolerance cannot keep the rest of the snapshot private.
         guard let initialWeekly = CodexConsumerProjection.sourceRateWindow(
             for: .weekly,
             snapshot: initial)
         else {
+            if Self.resetIsPastDisplayTolerance(previousWeekly, now: initial.updatedAt) {
+                return .publishInitial
+            }
             return .preservePrevious
         }
         guard initialWeekly.usedPercent.isFinite else { return .preservePrevious }
@@ -130,6 +133,9 @@ struct CodexWeeklyResetConfirmation: Sendable {
         if initialWeekly.resetsAt != nil,
            Self.validResetBoundary(initialWeekly, capturedAt: initial.updatedAt) == nil
         {
+            if Self.resetIsPastDisplayTolerance(previousWeekly, now: initial.updatedAt) {
+                return .publishInitial
+            }
             return .preservePrevious
         }
         if let previousBoundary, let initialBoundary,
@@ -516,6 +522,80 @@ struct CodexWeeklyResetConfirmation: Sendable {
         // The live provider omits a consumed credit instead of retaining a redeemed row, so the
         // successful inventory's aggregate count must also corroborate the disappearance.
         return current.availableCount < previousAvailableCount
+    }
+
+    enum LiveLane: Hashable, Sendable {
+        case session
+        case weekly
+        case extra(String)
+    }
+
+    /// A lane still in force. A reset that has already passed is not a bar a later read must protect.
+    static func isLiveLane(_ window: RateWindow?, now: Date) -> Bool {
+        guard let window,
+              window.usedPercent.isFinite,
+              let resetsAt = self.finiteResetInstant(window)
+        else { return false }
+        return resetsAt > now
+    }
+
+    /// Hide or stop protecting a lane only after the same two-minute tolerance used for reset boundaries.
+    static func resetIsPastDisplayTolerance(_ window: RateWindow?, now: Date) -> Bool {
+        guard let resetsAt = window.flatMap(self.finiteResetInstant) else { return false }
+        return now.timeIntervalSince(resetsAt) > self.resetEquivalenceToleranceSeconds
+    }
+
+    static func omittedLiveLanes(
+        baseline: UsageSnapshot?,
+        current: UsageSnapshot,
+        now: Date) -> Set<LiveLane>
+    {
+        guard let baseline else { return [] }
+        var omitted: Set<LiveLane> = []
+        if self.isLiveLane(CodexConsumerProjection.sourceRateWindow(for: .session, snapshot: baseline), now: now),
+           CodexConsumerProjection.sourceRateWindow(for: .session, snapshot: current) == nil
+        {
+            omitted.insert(.session)
+        }
+        if self.isLiveLane(CodexConsumerProjection.sourceRateWindow(for: .weekly, snapshot: baseline), now: now),
+           CodexConsumerProjection.sourceRateWindow(for: .weekly, snapshot: current) == nil
+        {
+            omitted.insert(.weekly)
+        }
+        let currentExtraIDs = Set((current.extraRateWindows ?? []).map(\.id))
+        for named in baseline.extraRateWindows ?? [] where self.isLiveLane(named.window, now: now) {
+            if !currentExtraIDs.contains(named.id) {
+                omitted.insert(.extra(named.id))
+            }
+        }
+        return omitted
+    }
+
+    static func restoredLaneIsUnconfirmedReset(
+        _ lane: LiveLane,
+        baseline: UsageSnapshot,
+        confirmation: UsageSnapshot) -> Bool
+    {
+        guard let previous = self.window(for: lane, in: baseline),
+              let current = self.window(for: lane, in: confirmation)
+        else { return false }
+        return previous.usedPercent > self.resetThreshold && current.usedPercent <= self.resetThreshold
+    }
+
+    static func window(for lane: LiveLane, in snapshot: UsageSnapshot) -> RateWindow? {
+        switch lane {
+        case .session:
+            CodexConsumerProjection.sourceRateWindow(for: .session, snapshot: snapshot)
+        case .weekly:
+            CodexConsumerProjection.sourceRateWindow(for: .weekly, snapshot: snapshot)
+        case let .extra(id):
+            snapshot.extraRateWindows?.first { $0.id == id }?.window
+        }
+    }
+
+    private static func finiteResetInstant(_ window: RateWindow) -> Date? {
+        guard let resetsAt = window.resetsAt, self.isFinite(resetsAt) else { return nil }
+        return resetsAt
     }
 
     private static func finiteResetBoundary(_ window: RateWindow) -> Date? {
