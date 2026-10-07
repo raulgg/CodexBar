@@ -6,42 +6,38 @@ import Testing
 struct CodexWeeklyResetLiveLanePublicationTests {
     private let now = Date(timeIntervalSince1970: 1_800_000_000)
 
-    @Test
-    func `expired weekly lane publishes a newer exact monthly snapshot without confirmation`() async throws {
-        let previous = self.snapshot(
-            at: self.now,
-            weeklyUsed: 20,
-            weeklyReset: self.now.addingTimeInterval(-17 * 24 * 60 * 60),
-            monthlyUsed: 25)
-        let current = self.snapshot(
-            at: self.now.addingTimeInterval(10),
-            monthlyUsed: 40)
-        let calls = FetchCounter()
-        let admission = await self.admit(previous: previous, initial: current, calls: calls)
-
-        let published = try #require(admission.outcome).result.get().usage
-        #expect(calls.isEmpty)
-        #expect(published.primary?.windowMinutes == 43200)
-        #expect(published.primary?.usedPercent == 40)
-        #expect(published.secondary == nil)
-    }
-
-    @Test
-    func `an exact read that still carries an expired weekly lane publishes without it`() async throws {
+    @Test(arguments: CurrentUsageView.allCases)
+    func `an expired cached weekly lane publishes the current usage view without confirmation`(
+        view: CurrentUsageView) async throws
+    {
         let expiredReset = self.now.addingTimeInterval(-17 * 24 * 60 * 60)
         let previous = self.snapshot(at: self.now, weeklyUsed: 20, weeklyReset: expiredReset, monthlyUsed: 25)
-        let current = self.snapshot(
-            at: self.now.addingTimeInterval(10),
-            weeklyUsed: 18,
-            weeklyReset: expiredReset,
-            monthlyUsed: 40)
+        let current = self.currentUsageSnapshot(view, at: self.now.addingTimeInterval(10))
         let calls = FetchCounter()
         let admission = await self.admit(previous: previous, initial: current, calls: calls)
 
         let published = try #require(admission.outcome).result.get().usage
         #expect(calls.isEmpty)
-        #expect(published.primary?.usedPercent == 40)
-        #expect(published.secondary == nil)
+        self.expectCurrentUsage(view, in: published)
+    }
+
+    @Test(arguments: CurrentUsageView.viewsThatCanCarryAnExpiredWeekly)
+    func `an exact read keeps the current usage view and drops an expired weekly lane`(
+        view: CurrentUsageView) async throws
+    {
+        let expiredReset = self.now.addingTimeInterval(-17 * 24 * 60 * 60)
+        let previous = self.snapshot(at: self.now, weeklyUsed: 20, weeklyReset: expiredReset)
+        let current = self.currentUsageSnapshot(
+            view,
+            at: self.now.addingTimeInterval(10),
+            expiredWeeklyReset: expiredReset)
+        let calls = FetchCounter()
+        let admission = await self.admit(previous: previous, initial: current, calls: calls)
+
+        let published = try #require(admission.outcome).result.get().usage
+        #expect(calls.isEmpty)
+        self.expectCurrentUsage(view, in: published)
+        #expect(CodexConsumerProjection.sourceRateWindow(for: .weekly, snapshot: published) == nil)
     }
 
     @Test
@@ -217,9 +213,106 @@ struct CodexWeeklyResetLiveLanePublicationTests {
         #expect(collapsedAdmission.outcome == nil)
     }
 
+    enum CurrentUsageView: CaseIterable, Sendable {
+        case monthly
+        case session
+        case sessionAndSpark
+        case renewedWeekly
+
+        static let viewsThatCanCarryAnExpiredWeekly: [CurrentUsageView] = [
+            .monthly, .session, .sessionAndSpark,
+        ]
+    }
+
     enum LaneKind: String, Sendable {
         case session
         case spark
+    }
+
+    private var renewedWeeklyReset: Date {
+        self.now.addingTimeInterval(5 * 24 * 60 * 60)
+    }
+
+    private func currentUsageSnapshot(
+        _ view: CurrentUsageView,
+        at updatedAt: Date,
+        expiredWeeklyReset: Date? = nil) -> UsageSnapshot
+    {
+        let carriedWeekly = expiredWeeklyReset != nil
+        let weeklyUsed: Double? = if carriedWeekly {
+            18
+        } else if view == .renewedWeekly {
+            15
+        } else {
+            nil
+        }
+        let weeklyReset = expiredWeeklyReset ?? (view == .renewedWeekly ? self.renewedWeeklyReset : nil)
+        switch view {
+        case .monthly:
+            return self.snapshot(
+                at: updatedAt,
+                weeklyUsed: weeklyUsed,
+                weeklyReset: weeklyReset,
+                monthlyUsed: 40)
+        case .session:
+            return self.snapshot(
+                at: updatedAt,
+                sessionUsed: 12,
+                weeklyUsed: weeklyUsed,
+                weeklyReset: weeklyReset)
+        case .sessionAndSpark:
+            return self.snapshot(
+                at: updatedAt,
+                sessionUsed: 12,
+                weeklyUsed: weeklyUsed,
+                weeklyReset: weeklyReset,
+                extras: [self.sparkWindow(usedPercent: 7, at: updatedAt)])
+        case .renewedWeekly:
+            return self.snapshot(
+                at: updatedAt,
+                weeklyUsed: weeklyUsed,
+                weeklyReset: weeklyReset)
+        }
+    }
+
+    private func expectCurrentUsage(_ view: CurrentUsageView, in snapshot: UsageSnapshot) {
+        let session = CodexConsumerProjection.sourceRateWindow(for: .session, snapshot: snapshot)
+        let weekly = CodexConsumerProjection.sourceRateWindow(for: .weekly, snapshot: snapshot)
+        let spark = snapshot.extraRateWindows?
+            .first { $0.id == CodexAdditionalRateLimitMapper.sparkWindowID }?
+            .window
+        switch view {
+        case .monthly:
+            #expect(snapshot.primary?.windowMinutes == CodexConsumerProjection.monthlyWindowMinutes)
+            #expect(snapshot.primary?.usedPercent == 40)
+            #expect(session == nil)
+            #expect(weekly == nil)
+            #expect(spark == nil)
+        case .session:
+            #expect(session?.usedPercent == 12)
+            #expect(weekly == nil)
+            #expect(spark == nil)
+        case .sessionAndSpark:
+            #expect(session?.usedPercent == 12)
+            #expect(weekly == nil)
+            #expect(spark?.usedPercent == 7)
+        case .renewedWeekly:
+            #expect(session == nil)
+            #expect(weekly?.usedPercent == 15)
+            #expect(weekly?.resetsAt == self.renewedWeeklyReset)
+            #expect(spark == nil)
+        }
+    }
+
+    private func sparkWindow(usedPercent: Double, at updatedAt: Date) -> NamedRateWindow {
+        NamedRateWindow(
+            id: CodexAdditionalRateLimitMapper.sparkWindowID,
+            title: "Codex Spark 5-hour",
+            window: RateWindow(
+                usedPercent: usedPercent,
+                windowMinutes: 300,
+                resetsAt: updatedAt.addingTimeInterval(2 * 60 * 60),
+                resetDescription: nil))
     }
 
     private func laneSnapshot(_ lane: LaneKind, at updatedAt: Date, used: Double?) -> UsageSnapshot {

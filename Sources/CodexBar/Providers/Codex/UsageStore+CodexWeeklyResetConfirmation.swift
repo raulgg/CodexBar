@@ -214,7 +214,7 @@ extension UsageStore {
                 for: .weekly,
                 snapshot: publicationResult.usage.scoped(to: .codex)) == nil
         {
-            // A reset that is already past the display tolerance is not a bar the next read must keep.
+            // Cached weekly usage past the display tolerance no longer hides the current usage view.
             if CodexWeeklyResetConfirmation.resetIsPastDisplayTolerance(baselineWeekly, now: input.observedAt),
                Self.isExactCodexOAuthResult(publicationResult)
             {

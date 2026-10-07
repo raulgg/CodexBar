@@ -116,8 +116,8 @@ struct CodexWeeklyResetConfirmation: Sendable {
         guard previousWeekly.usedPercent.isFinite else {
             return .preservePrevious
         }
-        // A missing weekly lane is not evidence of a reset. A lane whose reset is already past
-        // the display tolerance cannot keep the rest of the snapshot private.
+        // A missing weekly lane is not evidence of a reset. Once that cached weekly window is
+        // past the display tolerance, the current usage view can publish.
         guard let initialWeekly = CodexConsumerProjection.sourceRateWindow(
             for: .weekly,
             snapshot: initial)
