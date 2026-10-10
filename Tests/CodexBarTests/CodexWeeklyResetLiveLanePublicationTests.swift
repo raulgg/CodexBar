@@ -138,7 +138,7 @@ struct CodexWeeklyResetLiveLanePublicationTests {
     }
 
     @Test
-    func `a non-exact read that omits a live weekly lane does not fetch confirmation`() async {
+    func `a non-exact read that omits a live weekly lane publishes and carries it`() async throws {
         let previous = self.snapshot(at: self.now, weeklyUsed: 40)
         let initial = self.snapshot(
             at: self.now.addingTimeInterval(10),
@@ -152,8 +152,177 @@ struct CodexWeeklyResetLiveLanePublicationTests {
             initialLabel: "test-codex",
             calls: calls)
 
+        let published = try #require(admission.outcome).result.get().usage
         #expect(calls.isEmpty)
-        #expect(admission.outcome == nil)
+        #expect(published.updatedAt == initial.updatedAt)
+        #expect(published.primary?.usedPercent == 30)
+        #expect(CodexConsumerProjection.sourceRateWindow(for: .weekly, snapshot: published) == previous.secondary)
+    }
+
+    @Test
+    func `a non-exact read that omits a live session lane publishes and carries it`() async throws {
+        let previous = self.snapshot(at: self.now, sessionUsed: 25, weeklyUsed: 40)
+        let initial = self.snapshot(
+            at: self.now.addingTimeInterval(10),
+            weeklyUsed: 41,
+            confidence: .unknown)
+        let calls = FetchCounter()
+        let admission = await self.admit(
+            previous: previous,
+            initial: initial,
+            initialKind: .cli,
+            initialLabel: "test-codex",
+            calls: calls)
+
+        let published = try #require(admission.outcome).result.get().usage
+        #expect(calls.isEmpty)
+        #expect(CodexConsumerProjection.sourceRateWindow(for: .session, snapshot: published) == previous.primary)
+        #expect(CodexConsumerProjection.sourceRateWindow(for: .weekly, snapshot: published)?.usedPercent == 41)
+    }
+
+    @Test
+    func `a non-exact read that reports only monthly carries both session and weekly`() async throws {
+        let previous = self.snapshot(at: self.now, sessionUsed: 25, weeklyUsed: 40)
+        let initial = self.snapshot(at: self.now.addingTimeInterval(10), monthlyUsed: 30, confidence: .unknown)
+        let published = try await self.publishedNonExact(previous: previous, initial: initial)
+
+        #expect(published.updatedAt == initial.updatedAt)
+        #expect(published.primary == previous.primary)
+        #expect(published.secondary == previous.secondary)
+        #expect(published.tertiary == initial.primary)
+        #expect(published.extraRateWindows == nil)
+    }
+
+    @Test
+    func `a non-exact read that reports session and monthly carries the omitted weekly lane`() async throws {
+        let previous = self.snapshot(at: self.now, sessionUsed: 25, weeklyUsed: 40)
+        let initial = self.snapshot(
+            at: self.now.addingTimeInterval(10),
+            sessionUsed: 26,
+            monthlyUsed: 30,
+            confidence: .unknown)
+        let published = try await self.publishedNonExact(previous: previous, initial: initial)
+
+        #expect(published.primary == initial.primary)
+        #expect(published.secondary == previous.secondary)
+        #expect(published.tertiary == initial.secondary)
+    }
+
+    @Test
+    func `a non-exact read that reports weekly and monthly carries the omitted session lane`() async throws {
+        let previous = self.snapshot(at: self.now, sessionUsed: 25, weeklyUsed: 40)
+        let initial = self.snapshot(
+            at: self.now.addingTimeInterval(10),
+            weeklyUsed: 41,
+            monthlyUsed: 30,
+            confidence: .unknown)
+        let published = try await self.publishedNonExact(previous: previous, initial: initial)
+
+        #expect(published.primary == previous.primary)
+        #expect(published.secondary == initial.secondary)
+        #expect(published.tertiary == initial.primary)
+    }
+
+    @Test
+    func `a non-exact monthly-only read drops a weekly lane past the display tolerance`() async throws {
+        let observedAt = self.now.addingTimeInterval(30)
+        let previous = self.snapshot(
+            at: self.now.addingTimeInterval(-20 * 60),
+            sessionUsed: 25,
+            weeklyUsed: 57,
+            weeklyReset: observedAt.addingTimeInterval(-10 * 60))
+        let initial = self.snapshot(at: self.now.addingTimeInterval(10), monthlyUsed: 30, confidence: .unknown)
+        let published = try await self.publishedNonExact(previous: previous, initial: initial)
+
+        #expect(CodexConsumerProjection.sourceRateWindow(for: .weekly, snapshot: published) == nil)
+        #expect(published.primary == previous.primary)
+        #expect(published.secondary == initial.primary)
+        #expect(published.tertiary == nil)
+    }
+
+    @Test
+    func `an exact monthly-only read does not carry session or weekly`() async throws {
+        let previous = self.snapshot(at: self.now, sessionUsed: 25, weeklyUsed: 40)
+        let initial = self.snapshot(at: self.now.addingTimeInterval(10), monthlyUsed: 30)
+        let confirmation = self.snapshot(at: self.now.addingTimeInterval(20), monthlyUsed: 31)
+        let calls = FetchCounter()
+        let admission = await self.admit(
+            previous: previous,
+            initial: initial,
+            confirmation: confirmation,
+            calls: calls)
+
+        let published = try #require(admission.outcome).result.get().usage
+        #expect(calls.count == 1)
+        #expect(published.primary == confirmation.primary)
+        #expect(published.secondary == nil)
+        #expect(published.tertiary == nil)
+    }
+
+    @Test
+    func `a non-exact monthly-only read on a changed plan carries nothing`() async throws {
+        let previous = self.snapshot(at: self.now, sessionUsed: 25, weeklyUsed: 40, plan: "free")
+        let initial = self.snapshot(
+            at: self.now.addingTimeInterval(10),
+            monthlyUsed: 30,
+            plan: "plus",
+            confidence: .unknown)
+        let published = try await self.publishedNonExact(previous: previous, initial: initial)
+
+        #expect(published.primary == initial.primary)
+        #expect(published.secondary == nil)
+        #expect(published.tertiary == nil)
+    }
+
+    @Test(arguments: [(30.0, true), (10.0 * 60, false)])
+    func `a non-exact read carries an omitted weekly lane only inside the display tolerance`(
+        secondsPastReset: TimeInterval,
+        carried: Bool) async throws
+    {
+        let observedAt = self.now.addingTimeInterval(30)
+        let previous = self.snapshot(
+            at: self.now.addingTimeInterval(-20 * 60),
+            weeklyUsed: 57,
+            weeklyReset: observedAt.addingTimeInterval(-secondsPastReset))
+        let initial = self.snapshot(
+            at: self.now.addingTimeInterval(10),
+            sessionUsed: 31,
+            confidence: .unknown)
+        let calls = FetchCounter()
+        let admission = await self.admit(
+            previous: previous,
+            initial: initial,
+            initialKind: .cli,
+            initialLabel: "test-codex",
+            calls: calls)
+
+        let published = try #require(admission.outcome).result.get().usage
+        #expect(calls.isEmpty)
+        #expect(CodexConsumerProjection.sourceRateWindow(for: .session, snapshot: published)?.usedPercent == 31)
+        #expect(
+            CodexConsumerProjection.sourceRateWindow(for: .weekly, snapshot: published)?.usedPercent
+                == (carried ? 57 : nil))
+    }
+
+    @Test
+    func `a stored weekly lane classified by its slot is dropped once past the display tolerance`() async throws {
+        let expired = RateWindow(
+            usedPercent: 20,
+            windowMinutes: nil,
+            resetsAt: self.now.addingTimeInterval(-10 * 60),
+            resetDescription: nil)
+        let previous = self.snapshot(at: self.now.addingTimeInterval(-20 * 60), sessionUsed: 25)
+        let current = self.snapshot(at: self.now.addingTimeInterval(10), sessionUsed: 12)
+        let calls = FetchCounter()
+        let admission = await self.admit(
+            previous: previous.with(primary: previous.primary, secondary: expired),
+            initial: current.with(primary: current.primary, secondary: expired),
+            calls: calls)
+
+        let published = try #require(admission.outcome).result.get().usage
+        #expect(calls.isEmpty)
+        #expect(published.primary?.usedPercent == 12)
+        #expect(published.secondary == nil)
     }
 
     @Test
@@ -498,6 +667,18 @@ struct CodexWeeklyResetLiveLanePublicationTests {
                     kind: confirmationKind,
                     label: confirmationLabel)
             })
+    }
+
+    private func publishedNonExact(previous: UsageSnapshot, initial: UsageSnapshot) async throws -> UsageSnapshot {
+        let calls = FetchCounter()
+        let admission = await self.admit(
+            previous: previous,
+            initial: initial,
+            initialKind: .cli,
+            initialLabel: "test-codex",
+            calls: calls)
+        #expect(calls.isEmpty)
+        return try #require(admission.outcome).result.get().usage
     }
 
     private func outcome(

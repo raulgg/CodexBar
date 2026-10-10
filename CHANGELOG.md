@@ -137,7 +137,8 @@
 
 ### Fixed
 
-- Codex: show the current usage view once a cached weekly window has expired, keep a live session, weekly, or Spark bar until a second exact read agrees, and include the date on updates older than a day.
+- Codex: show the current usage view once a cached weekly window has expired, keep a live session, weekly, or Spark bar until a second exact read agrees, and carry a bar that a CLI or RPC read leaves out instead of holding the whole update.
+- Usage: include the date on "Updated" times older than a day in menus and CLI output.
 - Browser cookies: distinguish rejected sessions, permission failures, and provider outages in CLI refresh guidance without exposing cookie values (#4245). Thanks @sudoHG!
 - Claude: include saved limit-reset credits in OAuth usage while preserving quota and spending when the optional inventory query is rejected (#3895, #4232). Thanks @Yuxin-Qiao!
 - Antigravity: discover matching Google OAuth client credentials from Antigravity 2.19.1 and explain how to recover when Google rejects the client (#4229). Thanks @mvicari!

@@ -667,7 +667,7 @@ struct CodexBarTests {
             primary: RateWindow(
                 usedPercent: 1,
                 windowMinutes: 300,
-                resetsAt: now.addingTimeInterval(1800),
+                resetsAt: now.addingTimeInterval(7200),
                 resetDescription: nil),
             secondary: RateWindow(
                 usedPercent: 100,

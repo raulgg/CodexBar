@@ -8,6 +8,22 @@ extension StatusItemController {
         self.menuBarCountdownRefreshTask?.cancel()
         self.menuBarCountdownRefreshTask = nil
 
+        guard let delay = self.menuBarCountdownRefreshDelay(now: now) else { return }
+
+        self.menuBarCountdownRefreshTask = Task { @MainActor [weak self] in
+            do {
+                try await Task.sleep(for: .seconds(delay))
+            } catch {
+                return
+            }
+            guard let self, !Task.isCancelled else { return }
+            self.menuBarCountdownRefreshTask = nil
+            self.updateIcons()
+        }
+    }
+
+    /// Seconds until the menu bar next changes without new provider data, or nil when nothing is pending.
+    func menuBarCountdownRefreshDelay(now: Date) -> TimeInterval? {
         var delays: [TimeInterval] = []
         let providers = self.menuBarRefreshProviders()
         let displayMode = self.settings.menuBarDisplayMode
@@ -67,18 +83,7 @@ extension StatusItemController {
                     resetAt.timeIntervalSince(now) + Self.menuBarCountdownRefreshEpsilon))
             }
         }
-        guard let delay = delays.min() else { return }
-
-        self.menuBarCountdownRefreshTask = Task { @MainActor [weak self] in
-            do {
-                try await Task.sleep(for: .seconds(delay))
-            } catch {
-                return
-            }
-            guard let self, !Task.isCancelled else { return }
-            self.menuBarCountdownRefreshTask = nil
-            self.updateIcons()
-        }
+        return delays.min()
     }
 
     nonisolated static func menuBarCountdownRefreshDelay(

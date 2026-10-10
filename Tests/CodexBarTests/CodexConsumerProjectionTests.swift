@@ -867,3 +867,65 @@ struct CodexConsumerProjectionTests {
             startupBehavior: .testing)
     }
 }
+
+extension CodexConsumerProjectionTests {
+    @Test
+    func `a monthly window in the tertiary slot projects after session and weekly`() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let snapshot = Self.threeLaneSnapshot(now: now)
+
+        let projection = CodexConsumerProjection.make(
+            surface: .liveCard,
+            context: CodexConsumerProjection.Context(
+                snapshot: snapshot,
+                rawUsageError: nil,
+                liveCredits: nil,
+                rawCreditsError: nil,
+                liveDashboard: nil,
+                rawDashboardError: nil,
+                dashboardAttachmentAuthorized: false,
+                dashboardRequiresLogin: false,
+                now: now))
+
+        #expect(projection.visibleRateLanes == [.session, .weekly, .monthly])
+        #expect(projection.rateWindow(for: .session) == snapshot.primary)
+        #expect(projection.rateWindow(for: .weekly) == snapshot.secondary)
+        #expect(projection.rateWindow(for: .monthly) == snapshot.tertiary)
+        #expect(projection.planUtilizationLanes.map(\.role) == [.session, .weekly, .monthly])
+    }
+
+    @Test
+    func `automatic menu bar metric keeps session when monthly sits in the tertiary slot`() {
+        let store = self.makeStore(suite: "CodexConsumerProjectionTests-tertiary-monthly-automatic")
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let snapshot = Self.threeLaneSnapshot(now: now)
+
+        let projection = store.codexConsumerProjection(
+            surface: .menuBar,
+            snapshotOverride: snapshot,
+            now: now)
+
+        #expect(projection.automaticMenuBarWindow()?.windowMinutes == 300)
+        #expect(store.codexMenuBarMetricWindow(snapshot: snapshot, now: now)?.windowMinutes == 300)
+    }
+
+    private static func threeLaneSnapshot(now: Date) -> UsageSnapshot {
+        UsageSnapshot(
+            primary: RateWindow(
+                usedPercent: 55,
+                windowMinutes: 300,
+                resetsAt: now.addingTimeInterval(3 * 3600),
+                resetDescription: nil),
+            secondary: RateWindow(
+                usedPercent: 5,
+                windowMinutes: 10080,
+                resetsAt: now.addingTimeInterval(7 * 86400),
+                resetDescription: nil),
+            tertiary: RateWindow(
+                usedPercent: 30,
+                windowMinutes: 43200,
+                resetsAt: now.addingTimeInterval(24 * 86400),
+                resetDescription: nil),
+            updatedAt: now)
+    }
+}

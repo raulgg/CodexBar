@@ -75,7 +75,7 @@ struct StatusMenuScopedCodexRefreshTests {
             account: account,
             configRevision: settings.configRevision,
             expiresAt: .distantFuture)
-        let initialUpdatedAt = Date(timeIntervalSince1970: 1_700_000_000)
+        let initialUpdatedAt = Date()
         store.snapshots[.codex] = Self.snapshot(usedPercent: 12, updatedAt: initialUpdatedAt)
 
         try await withStatusItemControllerForTesting(

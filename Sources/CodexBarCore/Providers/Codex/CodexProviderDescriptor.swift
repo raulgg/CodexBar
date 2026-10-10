@@ -204,6 +204,7 @@ public enum CodexProviderDescriptor {
         let slotted = [
             self.classified(snapshot.primary, fallback: .session),
             self.classified(snapshot.secondary, fallback: .weekly),
+            self.classified(snapshot.tertiary, fallback: .monthly),
         ].compactMap(\.self)
         let windowsByLane = self.windowsByLane(snapshot: snapshot)
         let weekly = windowsByLane[.weekly]
@@ -220,6 +221,7 @@ public enum CodexProviderDescriptor {
                     isSyntheticPlaceholder: window.isSyntheticPlaceholder)
             }
             guard window.remainingPercent > 0 || window.resetsAt.map({ $0 > now }) != false else { return nil }
+            if lane != .monthly, CodexResetDisplayTolerance.resetIsPast(window, now: now) { return nil }
             return window
         }
     }
@@ -231,6 +233,10 @@ public enum CodexProviderDescriptor {
         ].compactMap(\.self)
         var result: [UsageLane: RateWindow] = [:]
         for (lane, window) in slotted {
+            result[lane] = window
+        }
+        // The tertiary slot only fills a lane the primary and secondary slots left unclaimed.
+        if let (lane, window) = self.classified(snapshot.tertiary, fallback: .monthly), result[lane] == nil {
             result[lane] = window
         }
         return result

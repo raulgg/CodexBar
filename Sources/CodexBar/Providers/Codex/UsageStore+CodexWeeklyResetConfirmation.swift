@@ -20,6 +20,7 @@ extension UsageStore {
     }
 
     private struct CodexMissingWeeklyAdmissionInput {
+        let rawInitialResult: ProviderFetchResult
         let rawInitialSnapshot: UsageSnapshot
         let previousSnapshot: UsageSnapshot?
         let publicationBaseline: UsageSnapshot?
@@ -82,6 +83,7 @@ extension UsageStore {
 
         if CodexConsumerProjection.sourceRateWindow(for: .weekly, snapshot: rawInitialSnapshot) == nil {
             return Self.codexMissingWeeklyAdmission(input: CodexMissingWeeklyAdmissionInput(
+                rawInitialResult: rawInitialResult,
                 rawInitialSnapshot: rawInitialSnapshot,
                 previousSnapshot: previousSnapshot,
                 publicationBaseline: publicationBaseline,
@@ -212,27 +214,25 @@ extension UsageStore {
                 pendingCandidate: input.pendingCandidate,
                 withheldSuccess: withheldSuccess)
         }
-        if let baselineWeekly = CodexConsumerProjection.sourceRateWindow(
+        let baselineWeekly = CodexConsumerProjection.sourceRateWindow(
             for: .weekly,
-            snapshot: input.publicationBaseline),
-            case let .success(publicationResult) = input.publicationInitialOutcome.result,
-            CodexConsumerProjection.sourceRateWindow(
-                for: .weekly,
-                snapshot: publicationResult.usage.scoped(to: .codex)) == nil
+            snapshot: input.publicationBaseline)
+        switch CodexWeeklyResetConfirmation.missingWeeklyDecision(
+            previousWeekly: baselineWeekly,
+            now: input.observedAt)
         {
-            // Cached weekly usage past the display tolerance no longer hides the current usage view.
-            if CodexWeeklyResetConfirmation.resetIsPastDisplayTolerance(baselineWeekly, now: input.observedAt),
-               Self.isExactCodexOAuthResult(publicationResult)
-            {
-                return self.codexAdmittedOutcome(
-                    input.publicationInitialOutcome,
-                    baseline: input.publicationBaseline,
-                    now: input.observedAt)
+        case .publishInitial:
+            break
+        case .preservePrevious, .requiresConfirmation:
+            // Only an exact read is held back. A CLI or RPC read publishes with the weekly lane carried.
+            guard !Self.isExactCodexOAuthResult(input.rawInitialResult),
+                  Self.codexCarriesLane(.weekly, from: input.publicationBaseline, now: input.observedAt)
+            else {
+                return CodexWeeklyResetPublicationAdmission(
+                    outcome: nil,
+                    pendingCandidate: input.pendingCandidate,
+                    withheldSuccess: withheldSuccess)
             }
-            return CodexWeeklyResetPublicationAdmission(
-                outcome: nil,
-                pendingCandidate: input.pendingCandidate,
-                withheldSuccess: withheldSuccess)
         }
         return self.codexAdmittedOutcome(
             input.publicationInitialOutcome,
@@ -285,11 +285,12 @@ extension UsageStore {
                 trace: confirmationTrace)
             return CodexWeeklyResetPublicationAdmission(outcome: nil, pendingCandidate: nil)
         }
-        // The initial read left no live lane out, so the confirmation may not either.
-        guard CodexWeeklyResetConfirmation.omittedLiveLanes(
+        // The initial read left no live lane out, so an exact confirmation may not either. A CLI or RPC
+        // confirmation publishes with its omitted lanes carried.
+        guard !Self.isExactCodexOAuthResult(confirmationResult) || CodexWeeklyResetConfirmation.omittedLiveLanes(
             baseline: context.publicationBaseline,
             current: confirmationSnapshot,
-            currentCarriesExtraLanes: Self.isExactCodexOAuthResult(confirmationResult),
+            currentCarriesExtraLanes: true,
             now: context.observedAt).isEmpty
         else {
             Self.logCodexWeeklyResetPublicationDecision(
@@ -335,11 +336,12 @@ extension UsageStore {
         _ context: CodexLiveLaneAdmissionContext,
         fetchConfirmation: @escaping CodexWeeklyConfirmationFetch) async -> CodexWeeklyResetPublicationAdmission?
     {
-        let initialIsExact = Self.isExactCodexOAuthResult(context.rawInitialResult)
+        // A CLI or RPC read never drops a lane on its own: publication carries the ones it left out.
+        guard self.isExactCodexOAuthResult(context.rawInitialResult) else { return nil }
         let omitted = CodexWeeklyResetConfirmation.omittedLiveLanes(
             baseline: context.publicationBaseline,
             current: context.rawInitialSnapshot,
-            currentCarriesExtraLanes: initialIsExact,
+            currentCarriesExtraLanes: true,
             now: context.observedAt)
         guard !omitted.isEmpty else { return nil }
         let initialIsNewer = context.publicationBaseline.map {
@@ -354,7 +356,7 @@ extension UsageStore {
             && CodexWeeklyResetConfirmation.resetIsInsideDisplayTolerance(
                 CodexConsumerProjection.sourceRateWindow(for: .weekly, snapshot: context.publicationBaseline),
                 now: context.observedAt)
-        guard initialIsNewer, initialIsExact, !weeklyResetsNow else {
+        guard initialIsNewer, !weeklyResetsNow else {
             return CodexWeeklyResetPublicationAdmission(
                 outcome: nil,
                 pendingCandidate: context.candidateForRetry,
@@ -472,13 +474,14 @@ extension UsageStore {
     {
         CodexWeeklyResetPublicationAdmission(
             outcome: self.strippingPastDisplayTolerance(
-                self.carryingLiveExtraLanes(outcome, from: baseline, now: now),
+                self.carryingBaselineLanes(outcome, from: baseline, now: now),
                 now: now),
             pendingCandidate: nil)
     }
 
-    /// CLI and RPC reads cannot report named lanes such as Spark; a live one stays until an exact read replaces it.
-    private nonisolated static func carryingLiveExtraLanes(
+    /// CLI and RPC reads cannot report named lanes such as Spark, and can leave out a session or weekly
+    /// lane. Those stay from the baseline until an exact read replaces them.
+    private nonisolated static func carryingBaselineLanes(
         _ outcome: ProviderFetchOutcome,
         from baseline: UsageSnapshot?,
         now: Date) -> ProviderFetchOutcome
@@ -489,13 +492,78 @@ extension UsageStore {
         else { return outcome }
         let snapshot = result.usage.scoped(to: .codex)
         guard !Self.codexPlanChanged(from: baseline, to: snapshot) else { return outcome }
+        let slotCarried = self.carryingDisplayableSlotLanes(snapshot, from: baseline, now: now)
         let presentIDs = Set((snapshot.extraRateWindows ?? []).map(\.id))
         let carried = (baseline.extraRateWindows ?? []).filter { named in
             !presentIDs.contains(named.id) && CodexWeeklyResetConfirmation.isLiveLane(named.window, now: now)
         }
-        guard !carried.isEmpty else { return outcome }
+        guard slotCarried != nil || !carried.isEmpty else { return outcome }
+        let updated = slotCarried ?? snapshot
+        guard !carried.isEmpty else { return outcome.replacingUsage(updated) }
         return outcome.replacingUsage(
-            snapshot.with(extraRateWindows: (snapshot.extraRateWindows ?? []) + carried))
+            updated.with(extraRateWindows: (snapshot.extraRateWindows ?? []) + carried))
+    }
+
+    /// A baseline session or weekly lane the fresh read left out, while it is still on display.
+    private nonisolated static func codexCarriesLane(
+        _ lane: CodexConsumerProjection.RateLane,
+        from baseline: UsageSnapshot?,
+        now: Date) -> Bool
+    {
+        guard let window = CodexConsumerProjection.sourceRateWindow(for: lane, snapshot: baseline) else {
+            return false
+        }
+        return window.usedPercent.isFinite
+            && CodexConsumerProjection.displayableRateLanes(snapshot: baseline, now: now).contains(lane)
+    }
+
+    /// Copies the baseline window itself, never a rebuilt one. When session, weekly, and a fresh monthly
+    /// lane all exist they are placed by lane, with monthly in the tertiary slot. Otherwise a carried lane
+    /// takes a free primary or secondary slot, and is not carried when neither is free.
+    /// Nil means nothing was carried.
+    private nonisolated static func carryingDisplayableSlotLanes(
+        _ snapshot: UsageSnapshot,
+        from baseline: UsageSnapshot,
+        now: Date) -> UsageSnapshot?
+    {
+        let freshSession = CodexConsumerProjection.sourceRateWindow(for: .session, snapshot: snapshot)
+        let freshWeekly = CodexConsumerProjection.sourceRateWindow(for: .weekly, snapshot: snapshot)
+        let carriedSession = freshSession == nil && self.codexCarriesLane(.session, from: baseline, now: now)
+            ? CodexConsumerProjection.sourceRateWindow(for: .session, snapshot: baseline)
+            : nil
+        let carriedWeekly = freshWeekly == nil && self.codexCarriesLane(.weekly, from: baseline, now: now)
+            ? CodexConsumerProjection.sourceRateWindow(for: .weekly, snapshot: baseline)
+            : nil
+        // Monthly is never carried, so three lanes only exist when the fresh read reports it.
+        if let session = freshSession ?? carriedSession,
+           let weekly = freshWeekly ?? carriedWeekly,
+           let monthly = CodexConsumerProjection.sourceRateWindow(for: .monthly, snapshot: snapshot)
+        {
+            guard session != snapshot.primary || weekly != snapshot.secondary || monthly != snapshot.tertiary
+            else { return nil }
+            return snapshot.with(primary: session, secondary: weekly).with(tertiary: monthly)
+        }
+
+        var primary = snapshot.primary
+        var secondary = snapshot.secondary
+        if let session = carriedSession {
+            // Anything else in the primary slot is labeled by its window length, so it can move down.
+            if primary == nil {
+                primary = session
+            } else if secondary == nil {
+                secondary = primary
+                primary = session
+            }
+        }
+        if let weekly = carriedWeekly {
+            if secondary == nil {
+                secondary = weekly
+            } else if primary == nil, weekly.windowMinutes == CodexConsumerProjection.weeklyWindowMinutes {
+                primary = weekly
+            }
+        }
+        guard primary != snapshot.primary || secondary != snapshot.secondary else { return nil }
+        return snapshot.with(primary: primary, secondary: secondary)
     }
 
     private nonisolated static func strippingPastDisplayTolerance(
@@ -512,8 +580,11 @@ extension UsageStore {
         _ snapshot: UsageSnapshot,
         now: Date) -> UsageSnapshot
     {
-        let primary = self.keepingCurrentDisplayWindow(snapshot.primary, now: now)
-        let secondary = self.keepingCurrentDisplayWindow(snapshot.secondary, now: now)
+        // Same lane classification and display rule as the projection, so nothing it hides stays stored.
+        let displayable = CodexConsumerProjection.displayableRateLanes(snapshot: snapshot, now: now)
+        let slotLanes = CodexConsumerProjection.slotRateLanes(snapshot: snapshot)
+        let primary = slotLanes.primary.map(displayable.contains) == false ? nil : snapshot.primary
+        let secondary = slotLanes.secondary.map(displayable.contains) == false ? nil : snapshot.secondary
         var updated = snapshot
         if primary != snapshot.primary || secondary != snapshot.secondary {
             updated = snapshot.with(primary: primary, secondary: secondary)
@@ -524,22 +595,6 @@ extension UsageStore {
         }
         guard kept.count != extras.count else { return updated }
         return updated.with(extraRateWindows: kept.isEmpty ? nil : kept)
-    }
-
-    private nonisolated static func keepingCurrentDisplayWindow(
-        _ window: RateWindow?,
-        now: Date) -> RateWindow?
-    {
-        guard let window else { return nil }
-        let minutes = window.windowMinutes
-        let isSessionOrWeeklyLane = minutes == CodexConsumerProjection.sessionWindowMinutes
-            || minutes == CodexConsumerProjection.weeklyWindowMinutes
-        guard isSessionOrWeeklyLane,
-              CodexWeeklyResetConfirmation.resetIsPastDisplayTolerance(window, now: now)
-        else {
-            return window
-        }
-        return nil
     }
 
     private nonisolated static func codexCandidateAfterPreservedInitial(

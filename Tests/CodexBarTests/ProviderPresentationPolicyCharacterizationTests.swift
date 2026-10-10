@@ -227,7 +227,7 @@ struct ProviderPresentationPolicyCharacterizationTests {
             (
                 .codex,
                 self.snapshot(primary: session, secondary: weekly, tertiary: monthly),
-                ["session:300", "weekly:10080"]),
+                ["session:300", "weekly:10080", "monthly:43200"]),
             (
                 .claude,
                 self.snapshot(primary: session, secondary: weekly, tertiary: weekly),

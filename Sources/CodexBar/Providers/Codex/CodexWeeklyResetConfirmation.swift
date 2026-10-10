@@ -78,7 +78,7 @@ struct CodexWeeklyResetConfirmation: Sendable {
         case noInventoryToPreserve
     }
 
-    static let resetEquivalenceToleranceSeconds: TimeInterval = 2 * 60
+    static let resetEquivalenceToleranceSeconds = CodexResetDisplayTolerance.seconds
     private static let stableUnchangedBoundaryToleranceSeconds: TimeInterval = 1
     private static let delayedCandidateMinimumAge: TimeInterval = 60
     private static let delayedCandidateMaximumAge: TimeInterval = 30 * 60
@@ -116,16 +116,11 @@ struct CodexWeeklyResetConfirmation: Sendable {
         guard previousWeekly.usedPercent.isFinite else {
             return .preservePrevious
         }
-        // A missing weekly lane is not evidence of a reset. Once that cached weekly window is
-        // past the display tolerance, the current usage view can publish.
         guard let initialWeekly = CodexConsumerProjection.sourceRateWindow(
             for: .weekly,
             snapshot: initial)
         else {
-            if Self.resetIsPastDisplayTolerance(previousWeekly, now: initial.updatedAt) {
-                return .publishInitial
-            }
-            return .preservePrevious
+            return Self.missingWeeklyDecision(previousWeekly: previousWeekly, now: initial.updatedAt)
         }
         guard initialWeekly.usedPercent.isFinite else { return .preservePrevious }
         let previousBoundary = Self.finiteResetBoundary(previousWeekly)
@@ -153,6 +148,14 @@ struct CodexWeeklyResetConfirmation: Sendable {
             return .preservePrevious
         }
         return .requiresConfirmation
+    }
+
+    /// A missing weekly lane is not evidence of a reset. Once the cached weekly window is past the
+    /// display tolerance, the current usage view can publish.
+    static func missingWeeklyDecision(previousWeekly: RateWindow?, now: Date) -> InitialDecision {
+        guard let previousWeekly else { return .publishInitial }
+        guard previousWeekly.usedPercent.isFinite else { return .preservePrevious }
+        return Self.resetIsPastDisplayTolerance(previousWeekly, now: now) ? .publishInitial : .preservePrevious
     }
 
     static func confirmationDecision(
@@ -541,8 +544,7 @@ struct CodexWeeklyResetConfirmation: Sendable {
 
     /// Hide or stop protecting a lane only after the same two-minute tolerance used for reset boundaries.
     static func resetIsPastDisplayTolerance(_ window: RateWindow?, now: Date) -> Bool {
-        guard let resetsAt = window.flatMap(self.finiteResetInstant) else { return false }
-        return now.timeIntervalSince(resetsAt) > self.resetEquivalenceToleranceSeconds
+        CodexResetDisplayTolerance.resetIsPast(window, now: now)
     }
 
     /// A reset that has passed but is still inside the display tolerance keeps showing "Resets now".
@@ -604,8 +606,7 @@ struct CodexWeeklyResetConfirmation: Sendable {
     }
 
     private static func finiteResetInstant(_ window: RateWindow) -> Date? {
-        guard let resetsAt = window.resetsAt, self.isFinite(resetsAt) else { return nil }
-        return resetsAt
+        CodexResetDisplayTolerance.finiteResetInstant(window)
     }
 
     private static func finiteResetBoundary(_ window: RateWindow) -> Date? {

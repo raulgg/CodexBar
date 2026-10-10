@@ -356,31 +356,22 @@ struct CodexConsumerProjection {
     }
 
     func rateWindow(for lane: RateLane) -> RateWindow? {
-        guard let window = self.rateWindowsByLane[lane] else { return nil }
-        switch lane {
-        case .session:
-            let display = Self.sessionDisplayWindow(
-                session: window,
-                weekly: self.rateWindowsByLane[.weekly],
-                evaluationTime: self.evaluationTime)
-            guard !CodexWeeklyResetConfirmation.resetIsPastDisplayTolerance(
-                display,
-                now: self.evaluationTime)
-            else {
-                return nil
-            }
-            return display
-        case .weekly:
-            guard !CodexWeeklyResetConfirmation.resetIsPastDisplayTolerance(
-                window,
-                now: self.evaluationTime)
-            else {
-                return nil
-            }
-            return window
-        case .monthly:
-            return window
-        }
+        Self.displayWindow(for: lane, in: self.rateWindowsByLane, evaluationTime: self.evaluationTime)
+    }
+
+    /// Lanes of a stored snapshot that are still on display at `now`, by the rule every surface uses.
+    static func displayableRateLanes(snapshot: UsageSnapshot?, now: Date) -> Set<RateLane> {
+        let rateWindowsByLane = self.rateWindowsByLane(snapshot: snapshot)
+        return Set(rateWindowsByLane.keys.filter {
+            self.displayWindow(for: $0, in: rateWindowsByLane, evaluationTime: now) != nil
+        })
+    }
+
+    /// The lane each raw snapshot slot belongs to, including the slot fallback for unlabeled windows.
+    static func slotRateLanes(snapshot: UsageSnapshot) -> (primary: RateLane?, secondary: RateLane?) {
+        (
+            self.classifyRateWindow(snapshot.primary, slot: .primary)?.0,
+            self.classifyRateWindow(snapshot.secondary, slot: .secondary)?.0)
     }
 
     func sourceRateWindow(for lane: RateLane) -> RateWindow? {
@@ -408,10 +399,9 @@ struct CodexConsumerProjection {
         let windows = self.visibleRateLanes.compactMap {
             self.menuBarSelectableRateWindow(for: $0)
         }
+        // Only a leading longer window hides weekly; a monthly window behind session and weekly does not.
         guard let weekly = self.menuBarSelectableRateWindow(for: .weekly),
-              windows.contains(where: {
-                  $0.windowMinutes.map { $0 > Self.weeklyWindowMinutes } ?? false
-              })
+              windows.first?.windowMinutes.map({ $0 > Self.weeklyWindowMinutes }) ?? false
         else {
             return windows.first
         }
@@ -444,7 +434,7 @@ struct CodexConsumerProjection {
     }
 
     var nextMenuBarStateChangeAt: Date? {
-        self.rateWindowsByLane.values.compactMap { window in
+        let exhaustedResets = self.rateWindowsByLane.values.compactMap { window -> Date? in
             guard window.remainingPercent <= 0,
                   let resetAt = window.resetsAt,
                   resetAt > self.evaluationTime
@@ -452,7 +442,12 @@ struct CodexConsumerProjection {
                 return nil
             }
             return resetAt
-        }.min()
+        }
+        // A session or weekly lane still in the menu bar leaves it once its reset is past the display tolerance.
+        let displayExpiries = [RateLane.session, .weekly].compactMap { lane in
+            self.menuBarSelectableRateWindow(for: lane).flatMap(CodexResetDisplayTolerance.expiry(of:))
+        }
+        return (exhaustedResets + displayExpiries).min()
     }
 
     var hasBindingWeeklyCap: Bool {
@@ -513,12 +508,9 @@ struct CodexConsumerProjection {
     {
         var windowsByLane: [RateLane: RateWindow] = [:]
         if let snapshot {
-            let slottedWindows: [(RateLane, RateWindow)] = [
-                self.classifyRateWindow(snapshot.primary, slot: .primary),
-                self.classifyRateWindow(snapshot.secondary, slot: .secondary),
-            ].compactMap(\.self)
-
-            for (lane, window) in slottedWindows {
+            for (slot, lane, window) in self.slottedRateWindows(snapshot: snapshot) {
+                // The tertiary slot only fills a lane the primary and secondary slots left unclaimed.
+                guard slot != .tertiary || windowsByLane[lane] == nil else { continue }
                 windowsByLane[lane] = window
             }
             guard windowsByLane.isEmpty, !snapshot.hasRateLimitWindows else {
@@ -543,19 +535,12 @@ struct CodexConsumerProjection {
             return rateWindowsByLane[.monthly] == nil ? [] : [.monthly]
         }
 
-        let slottedLanes = [
-            self.classifyRateWindow(snapshot.primary, slot: .primary)?.0,
-            self.classifyRateWindow(snapshot.secondary, slot: .secondary)?.0,
-        ].compactMap(\.self)
+        let slottedLanes = self.slottedRateWindows(snapshot: snapshot).map(\.lane)
 
         var visible: [RateLane] = []
-        for lane in slottedLanes where rateWindowsByLane[lane] != nil && !visible.contains(lane) {
-            if lane != .monthly,
-               let window = rateWindowsByLane[lane],
-               CodexWeeklyResetConfirmation.resetIsPastDisplayTolerance(window, now: evaluationTime)
-            {
-                continue
-            }
+        for lane in slottedLanes where !visible.contains(lane) {
+            guard self.displayWindow(for: lane, in: rateWindowsByLane, evaluationTime: evaluationTime) != nil
+            else { continue }
             visible.append(lane)
         }
         if visible.isEmpty, rateWindowsByLane[.monthly] != nil, !snapshot.hasRateLimitWindows {
@@ -586,6 +571,20 @@ struct CodexConsumerProjection {
     private enum SnapshotSlot {
         case primary
         case secondary
+        case tertiary
+    }
+
+    private static func slottedRateWindows(
+        snapshot: UsageSnapshot) -> [(slot: SnapshotSlot, lane: RateLane, window: RateWindow)]
+    {
+        let slots: [(SnapshotSlot, RateWindow?)] = [
+            (.primary, snapshot.primary),
+            (.secondary, snapshot.secondary),
+            (.tertiary, snapshot.tertiary),
+        ]
+        return slots.compactMap { slot, window in
+            self.classifyRateWindow(window, slot: slot).map { (slot, $0.0, $0.1) }
+        }
     }
 
     private static func classifyRateWindow(_ window: RateWindow?, slot: SnapshotSlot) -> (RateLane, RateWindow)? {
@@ -604,6 +603,8 @@ struct CodexConsumerProjection {
                 .session
             case .secondary:
                 .weekly
+            case .tertiary:
+                .monthly
             }
         }
 
@@ -616,6 +617,25 @@ struct CodexConsumerProjection {
         guard let weekly else { return false }
         guard weekly.remainingPercent <= 0 else { return false }
         return weekly.resetsAt.map { $0 > evaluationTime } ?? true
+    }
+
+    /// The one rule for what a lane shows at `evaluationTime`. A session or weekly lane is dropped once
+    /// the reset it displays is past the display tolerance; the session reset is the binding one when
+    /// the weekly lane caps it.
+    private static func displayWindow(
+        for lane: RateLane,
+        in rateWindowsByLane: [RateLane: RateWindow],
+        evaluationTime: Date) -> RateWindow?
+    {
+        guard let window = rateWindowsByLane[lane] else { return nil }
+        guard lane != .monthly else { return window }
+        let display = lane == .session
+            ? self.sessionDisplayWindow(
+                session: window,
+                weekly: rateWindowsByLane[.weekly],
+                evaluationTime: evaluationTime)
+            : window
+        return CodexResetDisplayTolerance.resetIsPast(display, now: evaluationTime) ? nil : display
     }
 
     private static func sessionDisplayWindow(
@@ -668,7 +688,10 @@ struct CodexConsumerProjection {
         let hasExhaustedLane = rateWindowsByLane.values.contains {
             $0.remainingPercent <= 0 && ($0.resetsAt.map { $0 > evaluationTime } ?? true)
         }
-        let hasNoRateWindows = rateWindowsByLane.isEmpty
+        // Lanes past the display tolerance are off the menu bar, so they leave room for the balance too.
+        let hasNoRateWindows = !rateWindowsByLane.keys.contains {
+            self.displayWindow(for: $0, in: rateWindowsByLane, evaluationTime: evaluationTime) != nil
+        }
         return (hasExhaustedLane || hasNoRateWindows) ? .creditsBalance : .none
     }
 

@@ -297,9 +297,12 @@ struct MenuBarCountdownRefreshTests {
         controller.updateIcons()
         #expect(controller._test_isMenuBarCountdownRefreshScheduled())
 
+        // The default icon has no countdown to tick, but still redraws once the lane passes the display
+        // tolerance two minutes after its reset.
         settings.menuBarShowsBrandIconWithPercent = false
         controller.updateIcons()
-        #expect(!controller._test_isMenuBarCountdownRefreshScheduled())
+        #expect(controller._test_isMenuBarCountdownRefreshScheduled())
+        #expect(controller.menuBarCountdownRefreshDelay(now: Date()).map { (200...211).contains($0) } == true)
         settings.menuBarShowsBrandIconWithPercent = true
 
         let now = Date()
@@ -455,7 +458,8 @@ struct MenuBarCountdownRefreshTests {
         controller.updateIcons()
         #expect(!controller._test_isMenuBarCountdownRefreshScheduled())
 
-        // Healthy quota → smart replacement inactive, so no boundary refresh.
+        // Healthy quota → smart replacement inactive, so no boundary refresh. The only wake left is the
+        // lane passing the display tolerance two minutes after its reset.
         store._setSnapshotForTesting(
             UsageSnapshot(
                 primary: RateWindow(
@@ -467,7 +471,7 @@ struct MenuBarCountdownRefreshTests {
                 updatedAt: now),
             provider: .codex)
         controller.updateIcons()
-        #expect(!controller._test_isMenuBarCountdownRefreshScheduled())
+        #expect(controller.menuBarCountdownRefreshDelay(now: now).map { abs($0 - 210) < 1 } == true)
     }
 
     @Test(arguments: [MenuBarDisplayMode.percent, .pace, .both])
@@ -646,13 +650,14 @@ struct MenuBarCountdownRefreshTests {
     }
 
     /// Money predicates move only when new provider data arrives, so they must not pin a clock tick.
+    /// The session lane's reset is an hour out; the one wake left is that lane passing the display tolerance.
     @Test
-    func `predicate-only cost conditional schedules nothing`() {
+    func `predicate-only cost conditional schedules no clock tick`() {
         let controller = Self.makePredicateOnlyController(
             suite: "MenuBarCountdownRefreshTests-predicate-only-cost",
             metric: .costToday)
         defer { controller.releaseStatusItemsForTesting() }
-        #expect(!controller._test_isMenuBarCountdownRefreshScheduled())
+        #expect(controller.menuBarCountdownRefreshDelay(now: Date()).map { $0 > 3600 } == true)
     }
 
     /// A reset-countdown predicate gets an exact wake-up at `resetsAt - threshold` rather than a tick.

@@ -437,7 +437,7 @@ struct StatusMenuPersistentRefreshTests {
         let controller = self.makeController(settings: settings)
         defer { controller.releaseStatusItemsForTesting() }
         let monitor = controller.menuCardRefreshMonitor
-        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let now = Date()
         controller.store.snapshots[.codex] = UsageSnapshot(
             primary: RateWindow(
                 usedPercent: 10,
@@ -497,7 +497,7 @@ struct StatusMenuPersistentRefreshTests {
         let controller = self.makeController(settings: settings)
         defer { controller.releaseStatusItemsForTesting() }
         let monitor = controller.menuCardRefreshMonitor
-        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let now = Date()
         controller.store.snapshots[.codex] = UsageSnapshot(
             primary: RateWindow(
                 usedPercent: 15,
@@ -549,7 +549,7 @@ struct StatusMenuPersistentRefreshTests {
         let controller = self.makeController(settings: settings)
         defer { controller.releaseStatusItemsForTesting() }
         let monitor = controller.menuCardRefreshMonitor
-        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let now = Date()
         controller.store.snapshots[.codex] = UsageSnapshot(
             primary: RateWindow(
                 usedPercent: 20,

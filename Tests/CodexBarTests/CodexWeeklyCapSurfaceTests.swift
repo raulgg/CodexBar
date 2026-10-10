@@ -92,7 +92,7 @@ struct CodexWeeklyCapSurfaceTests {
 
         let now = Date(timeIntervalSince1970: 1_800_000_000)
         let weeklyReset = now.addingTimeInterval(3600)
-        let sessionReset = now.addingTimeInterval(1800)
+        let sessionReset = now.addingTimeInterval(7200)
         let snapshot = UsageSnapshot(
             primary: RateWindow(
                 usedPercent: 1,

@@ -160,10 +160,11 @@ extension UsageMenuCardView.Model {
         ProviderDescriptorRegistry.descriptor(for: provider).presentation.menuCard
     }
 
-    private static func weeklyQuotaWindow(from input: Input) -> RateWindow? {
+    static func weeklyQuotaWindow(from input: Input) -> RateWindow? {
         guard let snapshot = input.snapshot else { return nil }
         let weekly = ProviderDescriptorRegistry.descriptor(for: input.provider)
             .presentation.semanticWindows(snapshot: snapshot).weekly
+        // Provider-specific by design: a Codex weekly lane leaves the display two minutes after its reset.
         guard input.provider != .codex
             || !CodexWeeklyResetConfirmation.resetIsPastDisplayTolerance(weekly, now: input.now)
         else {

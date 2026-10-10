@@ -490,7 +490,7 @@ extension CodexAccountScopedRefreshTests {
     }
 
     @Test
-    func `single non-exact refresh keeps the prior snapshot when a source omits a live weekly lane`() async {
+    func `single non-exact refresh publishes the fresh session and keeps an omitted live weekly lane`() async {
         let suite = "CodexWeeklyResetPublicationTests-single-missing-weekly"
         let email = "missing-weekly@example.com"
         let settings = self.makeSettingsStore(suite: suite)
@@ -526,11 +526,52 @@ extension CodexAccountScopedRefreshTests {
         await store.refreshProvider(.codex, allowDisabled: true)
 
         #expect(await loader.callCount == 1)
-        #expect(store.snapshots[.codex]?.updatedAt == prior.updatedAt)
-        #expect(store.snapshots[.codex]?.primary?.usedPercent == 25)
+        #expect(store.snapshots[.codex]?.updatedAt == partial.updatedAt)
+        #expect(store.snapshots[.codex]?.primary?.usedPercent == 31)
         #expect(store.snapshots[.codex]?.secondary?.usedPercent == 57)
         #expect(store.snapshots[.codex]?.secondary?.resetsAt == priorBoundary)
         #expect(store.lastKnownResetSnapshots[.codex]?.secondary?.usedPercent == 57)
+    }
+
+    @Test
+    func `single non-exact refresh publishes the current view once the cached weekly window expired`() async {
+        let suite = "CodexWeeklyResetPublicationTests-single-expired-weekly"
+        let email = "expired-weekly@example.com"
+        let settings = self.makeSettingsStore(suite: suite)
+        settings.refreshFrequency = .manual
+        settings.codexCookieSource = .off
+        settings._test_liveSystemCodexAccount = self.liveAccount(
+            email: email,
+            identity: .providerAccount(id: "acct-expired-weekly"))
+        defer { settings._test_liveSystemCodexAccount = nil }
+
+        let now = Date()
+        let prior = self.codexWeeklySnapshot(
+            email: email,
+            weeklyUsedPercent: 57,
+            weeklyReset: now.addingTimeInterval(-10 * 60),
+            updatedAt: now.addingTimeInterval(-15 * 60))
+        let partial = self.codexWeeklySnapshot(
+            email: email,
+            weeklyUsedPercent: nil,
+            weeklyReset: nil,
+            updatedAt: now.addingTimeInterval(-20),
+            sessionUsedPercent: 31)
+        let loader = SequencedCodexSnapshotLoader(steps: [.success(partial)])
+        let store = self.makeCodexWeeklyPublicationStore(settings: settings, suite: suite)
+        _ = await self.seedCodexWeeklyPublicationState(
+            store: store,
+            settings: settings,
+            snapshot: prior,
+            error: nil)
+        self.installContextualCodexProvider(on: store) { _ in try await loader.load() }
+
+        await store.refreshProvider(.codex, allowDisabled: true)
+
+        #expect(await loader.callCount == 1)
+        #expect(store.snapshots[.codex]?.updatedAt == partial.updatedAt)
+        #expect(store.snapshots[.codex]?.primary?.usedPercent == 31)
+        #expect(store.snapshots[.codex]?.secondary == nil)
     }
 
     @Test
