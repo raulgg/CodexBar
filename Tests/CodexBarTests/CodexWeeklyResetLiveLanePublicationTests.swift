@@ -40,13 +40,15 @@ struct CodexWeeklyResetLiveLanePublicationTests {
         #expect(CodexConsumerProjection.sourceRateWindow(for: .weekly, snapshot: published) == nil)
     }
 
-    @Test
-    func `a weekly reset inside the display tolerance still withholds a missing lane`() async {
+    @Test(arguments: [30.0, 90.0])
+    func `a weekly reset inside the display tolerance still withholds a missing lane`(
+        secondsPastReset: TimeInterval) async
+    {
         let observedAt = self.now.addingTimeInterval(30)
         let previous = self.snapshot(
             at: self.now.addingTimeInterval(-120),
             weeklyUsed: 20,
-            weeklyReset: observedAt.addingTimeInterval(-90))
+            weeklyReset: observedAt.addingTimeInterval(-secondsPastReset))
         let current = self.snapshot(at: self.now.addingTimeInterval(10), monthlyUsed: 40)
         let calls = FetchCounter()
         let admission = await self.admit(previous: previous, initial: current, calls: calls)
@@ -211,6 +213,126 @@ struct CodexWeeklyResetLiveLanePublicationTests {
             calls: collapsedCalls)
         #expect(collapsedCalls.count == 1)
         #expect(collapsedAdmission.outcome == nil)
+    }
+
+    @Test
+    func `a weekly reset inside the display tolerance withholds an agreed live session omission`() async {
+        let observedAt = self.now.addingTimeInterval(30)
+        let previous = self.snapshot(
+            at: self.now.addingTimeInterval(-120),
+            sessionUsed: 25,
+            weeklyUsed: 20,
+            weeklyReset: observedAt.addingTimeInterval(-30))
+        let initial = self.snapshot(at: self.now.addingTimeInterval(10), monthlyUsed: 40)
+        let confirmation = self.snapshot(at: self.now.addingTimeInterval(20), monthlyUsed: 41)
+        let calls = FetchCounter()
+        let admission = await self.admit(
+            previous: previous,
+            initial: initial,
+            confirmation: confirmation,
+            calls: calls)
+
+        #expect(calls.isEmpty)
+        #expect(admission.outcome == nil)
+        #expect(admission.withheldSuccess != nil)
+    }
+
+    @Test(arguments: [LaneKind.session, LaneKind.spark])
+    func `a confirmation that omits a different live lane keeps the current bars`(lane: LaneKind) async {
+        let previous = self.snapshot(
+            at: self.now,
+            sessionUsed: 25,
+            weeklyUsed: 40,
+            extras: [self.sparkWindow(usedPercent: 40, at: self.now)])
+        let initial = self.snapshot(
+            at: self.now.addingTimeInterval(10),
+            sessionUsed: 26,
+            extras: [self.sparkWindow(usedPercent: 41, at: self.now.addingTimeInterval(10))])
+        let confirmation = switch lane {
+        case .session:
+            self.snapshot(
+                at: self.now.addingTimeInterval(20),
+                weeklyUsed: 40,
+                extras: [self.sparkWindow(usedPercent: 42, at: self.now.addingTimeInterval(20))])
+        case .spark:
+            self.snapshot(
+                at: self.now.addingTimeInterval(20),
+                sessionUsed: 27,
+                weeklyUsed: 40)
+        }
+        let calls = FetchCounter()
+        let admission = await self.admit(
+            previous: previous,
+            initial: initial,
+            confirmation: confirmation,
+            calls: calls)
+
+        #expect(calls.count == 1)
+        #expect(admission.outcome == nil)
+    }
+
+    @Test
+    func `a non-exact read publishes session and weekly while a cached spark lane stays live`() async throws {
+        let previous = self.snapshot(
+            at: self.now,
+            sessionUsed: 25,
+            weeklyUsed: 55,
+            extras: [self.sparkWindow(usedPercent: 40, at: self.now)])
+        let initial = self.snapshot(
+            at: self.now.addingTimeInterval(10),
+            sessionUsed: 30,
+            weeklyUsed: 56,
+            confidence: .unknown)
+        let calls = FetchCounter()
+        let admission = await self.admit(
+            previous: previous,
+            initial: initial,
+            initialKind: .cli,
+            initialLabel: "codex-cli",
+            calls: calls)
+
+        let published = try #require(admission.outcome).result.get().usage
+        #expect(calls.isEmpty)
+        #expect(CodexConsumerProjection.sourceRateWindow(for: .session, snapshot: published)?.usedPercent == 30)
+        #expect(CodexConsumerProjection.sourceRateWindow(for: .weekly, snapshot: published)?.usedPercent == 56)
+        #expect(self.laneUsed(.spark, in: published) == 40)
+    }
+
+    @Test
+    func `a confirmation that restores one of two omitted live lanes publishes`() async throws {
+        let previous = self.snapshot(at: self.now, sessionUsed: 25, weeklyUsed: 40)
+        let initial = self.snapshot(at: self.now.addingTimeInterval(10), monthlyUsed: 30)
+        let confirmation = self.snapshot(at: self.now.addingTimeInterval(20), sessionUsed: 30)
+        let calls = FetchCounter()
+        let admission = await self.admit(
+            previous: previous,
+            initial: initial,
+            confirmation: confirmation,
+            calls: calls)
+
+        let published = try #require(admission.outcome).result.get().usage
+        #expect(calls.count == 1)
+        #expect(CodexConsumerProjection.sourceRateWindow(for: .session, snapshot: published)?.usedPercent == 30)
+        #expect(CodexConsumerProjection.sourceRateWindow(for: .weekly, snapshot: published) == nil)
+    }
+
+    @Test
+    func `a weekly reset confirmation that drops a live session lane keeps the current bars`() async {
+        let previous = self.snapshot(at: self.now, sessionUsed: 25, weeklyUsed: 40)
+        let initial = self.snapshot(
+            at: self.now.addingTimeInterval(10),
+            sessionUsed: 26,
+            weeklyUsed: 0.4)
+        let confirmation = self.snapshot(at: self.now.addingTimeInterval(20), weeklyUsed: 30)
+        let calls = FetchCounter()
+        let admission = await self.admit(
+            previous: previous,
+            initial: initial,
+            confirmation: confirmation,
+            calls: calls)
+
+        #expect(calls.count == 1)
+        #expect(admission.outcome == nil)
     }
 
     enum CurrentUsageView: CaseIterable, Sendable {

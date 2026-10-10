@@ -545,9 +545,17 @@ struct CodexWeeklyResetConfirmation: Sendable {
         return now.timeIntervalSince(resetsAt) > self.resetEquivalenceToleranceSeconds
     }
 
+    /// A reset that has passed but is still inside the display tolerance keeps showing "Resets now".
+    static func resetIsInsideDisplayTolerance(_ window: RateWindow?, now: Date) -> Bool {
+        guard let resetsAt = window.flatMap(self.finiteResetInstant) else { return false }
+        let elapsed = now.timeIntervalSince(resetsAt)
+        return elapsed >= 0 && elapsed <= self.resetEquivalenceToleranceSeconds
+    }
+
     static func omittedLiveLanes(
         baseline: UsageSnapshot?,
         current: UsageSnapshot,
+        currentCarriesExtraLanes: Bool,
         now: Date) -> Set<LiveLane>
     {
         guard let baseline else { return [] }
@@ -562,6 +570,8 @@ struct CodexWeeklyResetConfirmation: Sendable {
         {
             omitted.insert(.weekly)
         }
+        // CLI and RPC reads cannot report named lanes such as Spark, so their absence there is not an omission.
+        guard currentCarriesExtraLanes else { return omitted }
         let currentExtraIDs = Set((current.extraRateWindows ?? []).map(\.id))
         for named in baseline.extraRateWindows ?? [] where self.isLiveLane(named.window, now: now) {
             if !currentExtraIDs.contains(named.id) {

@@ -102,7 +102,10 @@ extension UsageStore {
             initialSnapshot: rawInitialSnapshot)
         switch initialDecision {
         case .publishInitial:
-            return self.codexAdmittedOutcome(publicationInitialOutcome, now: observedAt)
+            return self.codexAdmittedOutcome(
+                publicationInitialOutcome,
+                baseline: publicationBaseline,
+                now: observedAt)
         case .preservePrevious:
             return CodexWeeklyResetPublicationAdmission(
                 outcome: nil,
@@ -136,7 +139,10 @@ extension UsageStore {
                     confirmationSnapshot: pendingCandidate.snapshot))
             switch evaluation.decision {
             case .publishCurrent:
-                return self.codexAdmittedOutcome(publicationInitialOutcome, now: observedAt)
+                return self.codexAdmittedOutcome(
+                    publicationInitialOutcome,
+                    baseline: publicationBaseline,
+                    now: observedAt)
             case .retainCandidate:
                 return CodexWeeklyResetPublicationAdmission(
                     outcome: nil,
@@ -218,14 +224,20 @@ extension UsageStore {
             if CodexWeeklyResetConfirmation.resetIsPastDisplayTolerance(baselineWeekly, now: input.observedAt),
                Self.isExactCodexOAuthResult(publicationResult)
             {
-                return self.codexAdmittedOutcome(input.publicationInitialOutcome, now: input.observedAt)
+                return self.codexAdmittedOutcome(
+                    input.publicationInitialOutcome,
+                    baseline: input.publicationBaseline,
+                    now: input.observedAt)
             }
             return CodexWeeklyResetPublicationAdmission(
                 outcome: nil,
                 pendingCandidate: input.pendingCandidate,
                 withheldSuccess: withheldSuccess)
         }
-        return self.codexAdmittedOutcome(input.publicationInitialOutcome, now: input.observedAt)
+        return self.codexAdmittedOutcome(
+            input.publicationInitialOutcome,
+            baseline: input.publicationBaseline,
+            now: input.observedAt)
     }
 
     private struct CodexLiveLaneAdmissionContext {
@@ -273,6 +285,22 @@ extension UsageStore {
                 trace: confirmationTrace)
             return CodexWeeklyResetPublicationAdmission(outcome: nil, pendingCandidate: nil)
         }
+        // The initial read left no live lane out, so the confirmation may not either.
+        guard CodexWeeklyResetConfirmation.omittedLiveLanes(
+            baseline: context.publicationBaseline,
+            current: confirmationSnapshot,
+            currentCarriesExtraLanes: Self.isExactCodexOAuthResult(confirmationResult),
+            now: context.observedAt).isEmpty
+        else {
+            Self.logCodexWeeklyResetPublicationDecision(
+                stage: "confirmation",
+                decision: "preservePreviousNewOmission",
+                trace: confirmationTrace)
+            return CodexWeeklyResetPublicationAdmission(
+                outcome: nil,
+                pendingCandidate: context.candidateForRetry,
+                withheldSuccess: confirmationResult)
+        }
         let confirmationDecision = CodexWeeklyResetConfirmation.confirmationDecision(
             previous: context.publicationBaseline,
             previousEvidence: context.previousSnapshot,
@@ -286,6 +314,7 @@ extension UsageStore {
         case .publishConfirmation:
             return self.codexAdmittedOutcome(
                 confirmationOutcome.backfillingCodexResetWindows(from: context.missingWindowBackfillSnapshot),
+                baseline: context.publicationBaseline,
                 now: context.observedAt)
         case .preservePrevious:
             let candidate = Self.makeCodexDelayedCandidate(
@@ -306,17 +335,26 @@ extension UsageStore {
         _ context: CodexLiveLaneAdmissionContext,
         fetchConfirmation: @escaping CodexWeeklyConfirmationFetch) async -> CodexWeeklyResetPublicationAdmission?
     {
+        let initialIsExact = Self.isExactCodexOAuthResult(context.rawInitialResult)
         let omitted = CodexWeeklyResetConfirmation.omittedLiveLanes(
             baseline: context.publicationBaseline,
             current: context.rawInitialSnapshot,
+            currentCarriesExtraLanes: initialIsExact,
             now: context.observedAt)
         guard !omitted.isEmpty else { return nil }
-        let baselineIsNewer = context.publicationBaseline.map {
+        let initialIsNewer = context.publicationBaseline.map {
             $0.updatedAt.timeIntervalSinceReferenceDate.isFinite &&
                 context.rawInitialSnapshot.updatedAt.timeIntervalSinceReferenceDate.isFinite &&
                 context.rawInitialSnapshot.updatedAt > $0.updatedAt
         } ?? false
-        guard baselineIsNewer, Self.isExactCodexOAuthResult(context.rawInitialResult) else {
+        // A weekly bar inside the display tolerance still shows "Resets now"; a second read must not drop it.
+        let weeklyResetsNow = CodexConsumerProjection.sourceRateWindow(
+            for: .weekly,
+            snapshot: context.rawInitialSnapshot) == nil
+            && CodexWeeklyResetConfirmation.resetIsInsideDisplayTolerance(
+                CodexConsumerProjection.sourceRateWindow(for: .weekly, snapshot: context.publicationBaseline),
+                now: context.observedAt)
+        guard initialIsNewer, initialIsExact, !weeklyResetsNow else {
             return CodexWeeklyResetPublicationAdmission(
                 outcome: nil,
                 pendingCandidate: context.candidateForRetry,
@@ -356,9 +394,26 @@ extension UsageStore {
         }
         let admittedConfirmation = self.codexAdmittedOutcome(
             confirmationOutcome.backfillingCodexResetWindows(from: context.missingWindowBackfillSnapshot),
+            baseline: context.publicationBaseline,
             now: context.observedAt)
         if Self.codexPlanChanged(from: context.rawInitialSnapshot, to: confirmationSnapshot) {
             return admittedConfirmation
+        }
+        // The confirmation may only leave out lanes the initial read already left out.
+        let confirmationOmitted = CodexWeeklyResetConfirmation.omittedLiveLanes(
+            baseline: context.publicationBaseline,
+            current: confirmationSnapshot,
+            currentCarriesExtraLanes: true,
+            now: context.observedAt)
+        guard confirmationOmitted.isSubset(of: omitted) else {
+            Self.logCodexWeeklyResetPublicationDecision(
+                stage: "omittedLiveLane",
+                decision: "preservePreviousNewOmission",
+                trace: trace)
+            return CodexWeeklyResetPublicationAdmission(
+                outcome: nil,
+                pendingCandidate: context.candidateForRetry,
+                withheldSuccess: confirmationResult)
         }
         if let publicationBaseline = context.publicationBaseline {
             for lane in omitted
@@ -412,11 +467,35 @@ extension UsageStore {
 
     private nonisolated static func codexAdmittedOutcome(
         _ outcome: ProviderFetchOutcome,
+        baseline: UsageSnapshot?,
         now: Date) -> CodexWeeklyResetPublicationAdmission
     {
         CodexWeeklyResetPublicationAdmission(
-            outcome: self.strippingPastDisplayTolerance(outcome, now: now),
+            outcome: self.strippingPastDisplayTolerance(
+                self.carryingLiveExtraLanes(outcome, from: baseline, now: now),
+                now: now),
             pendingCandidate: nil)
+    }
+
+    /// CLI and RPC reads cannot report named lanes such as Spark; a live one stays until an exact read replaces it.
+    private nonisolated static func carryingLiveExtraLanes(
+        _ outcome: ProviderFetchOutcome,
+        from baseline: UsageSnapshot?,
+        now: Date) -> ProviderFetchOutcome
+    {
+        guard let baseline,
+              case let .success(result) = outcome.result,
+              !Self.isExactCodexOAuthResult(result)
+        else { return outcome }
+        let snapshot = result.usage.scoped(to: .codex)
+        guard !Self.codexPlanChanged(from: baseline, to: snapshot) else { return outcome }
+        let presentIDs = Set((snapshot.extraRateWindows ?? []).map(\.id))
+        let carried = (baseline.extraRateWindows ?? []).filter { named in
+            !presentIDs.contains(named.id) && CodexWeeklyResetConfirmation.isLiveLane(named.window, now: now)
+        }
+        guard !carried.isEmpty else { return outcome }
+        return outcome.replacingUsage(
+            snapshot.with(extraRateWindows: (snapshot.extraRateWindows ?? []) + carried))
     }
 
     private nonisolated static func strippingPastDisplayTolerance(
